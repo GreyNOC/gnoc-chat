@@ -1,0 +1,128 @@
+# oss-bot local client-side sink rules (no registry download). Output = LEAD seeds for xss-hunter /
+# hypothesis-generator, never findings. Secrets are owned by gitleaks/trufflehog, not duplicated here.
+rules:
+  - id: oss-bot.postmessage-no-origin-check
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: message event listener that never reads event.origin
+    patterns:
+      - pattern-either:
+          - pattern: $T.addEventListener("message", function ($E) { $...BODY }, ...)
+          - pattern: $T.addEventListener("message", ($E) => { $...BODY }, ...)
+          - pattern: addEventListener("message", function ($E) { $...BODY }, ...)
+          - pattern: addEventListener("message", ($E) => { $...BODY }, ...)
+          - pattern: window.onmessage = function ($E) { $...BODY }
+          - pattern: window.onmessage = ($E) => { $...BODY }
+      - metavariable-regex:
+          metavariable: $...BODY
+          regex: ^((?!\.origin)[\s\S])*$
+
+  - id: oss-bot.dom-html-sink-from-location
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: innerHTML / outerHTML / document.write fed from location, hash, search or referrer
+    mode: taint
+    pattern-sources:
+      - pattern-either:
+          - pattern: location.hash
+          - pattern: location.search
+          - pattern: location.href
+          - pattern: window.location.hash
+          - pattern: window.location.search
+          - pattern: window.location.href
+          - pattern: document.location.hash
+          - pattern: document.location.search
+          - pattern: document.URL
+          - pattern: document.referrer
+    pattern-sinks:
+      - pattern-either:
+          - pattern: $X.innerHTML = $V
+          - pattern: $X.outerHTML = $V
+          - pattern: document.write(...)
+          - pattern: document.writeln(...)
+          - pattern: $X.insertAdjacentHTML($P, $V)
+
+  - id: oss-bot.code-exec-sink-from-location
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: eval / new Function / setTimeout(string) fed from location, hash, search or referrer
+    mode: taint
+    pattern-sources:
+      - pattern-either:
+          - pattern: location.hash
+          - pattern: location.search
+          - pattern: location.href
+          - pattern: window.location.hash
+          - pattern: window.location.search
+          - pattern: document.location.hash
+          - pattern: document.URL
+          - pattern: document.referrer
+    pattern-sinks:
+      - pattern-either:
+          - pattern: eval(...)
+          - pattern: new Function(...)
+          - pattern: Function(...)
+          - pattern: setTimeout($V, ...)
+          - pattern: setInterval($V, ...)
+
+  - id: oss-bot.document-domain-assignment
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: document.domain assignment (origin relaxation)
+    pattern: document.domain = $V
+
+  - id: oss-bot.open-redirect-from-query
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: window.open / location assignment fed from query parameters
+    mode: taint
+    pattern-sources:
+      - pattern-either:
+          - pattern: location.search
+          - pattern: window.location.search
+          - pattern: location.hash
+          - pattern: window.location.hash
+          - pattern: new URLSearchParams(...).get(...)
+          - pattern: $P.get(...)
+    pattern-sinks:
+      - pattern-either:
+          - pattern: window.open($V, ...)
+          - pattern: location = $V
+          - pattern: window.location = $V
+          - pattern: location.href = $V
+          - pattern: window.location.href = $V
+          - pattern: document.location = $V
+          - pattern: document.location.href = $V
+          - pattern: location.assign($V)
+          - pattern: location.replace($V)
+
+  - id: oss-bot.hardcoded-internal-hostname
+    languages: [javascript, typescript, json, yaml]
+    severity: INFO
+    message: hardcoded internal / corp / staging / dev hostname (next-hostname seed)
+    pattern-regex: https?://[a-z0-9.-]*(internal|corp|staging|stg|dev)\.[a-z0-9.-]+
+
+  - id: oss-bot.jquery-html-from-location
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: jQuery html()/append() fed from location, hash or search
+    mode: taint
+    pattern-sources:
+      - pattern-either:
+          - pattern: location.hash
+          - pattern: location.search
+          - pattern: window.location.hash
+          - pattern: window.location.search
+    pattern-sinks:
+      - pattern-either:
+          - pattern: $J(...).html($V)
+          - pattern: $J(...).append($V)
+          - pattern: $J(...).prepend($V)
+          - pattern: $($V)
+          - pattern: jQuery($V)
+
+  - id: oss-bot.postmessage-wildcard-target
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: postMessage with "*" target origin (data sent to any embedding origin)
+    pattern: $W.postMessage($D, "*")

@@ -1,0 +1,49 @@
+# offsec-defsec: offensive and defensive security reasoning, grounded in Manual/GREYNOC-MANUAL*.md
+# T-NN rules (cite the id; the Manual carries the receipt). Each `expect:` is a case-insensitive
+# regex the turn's final answer must match; `gnoc train` prints GRADE n/m.
+# Run: gnoc train scripts/gnoc-curriculum/offsec-defsec.txt
+# HARD RULE (learned the hard way): each turn MUST be exactly ONE LINE. gnoc_train.py fires every
+# line as its own separate turn - a wrapped multi-line question becomes several incoherent
+# sentence-fragment turns, not one joined question. Never wrap a turn across lines.
+# Also: never start a turn with a bare label like "OFFSEC:" - the model reads it as a proper noun
+# it is being asked to define, not a category tag. Keep OFFSEC/DEFSEC only in the # comments.
+
+# OFFSEC. Manual T-191: canonicalize with the sink's platform semantics before containment; mutate the representation boundary.
+A path-traversal containment check normalizes the input before comparing it against an allowed root. Name the general attack move against this class of check, and cite the Manual rule number. One sentence.
+expect: (?=.*T-191)(?=.*(representation|canonicaliz|encod))
+
+# OFFSEC. Manual T-197: a URL fetcher is a state machine; validate the resolved destination again after every transition (redirect/DNS-rebind SSRF).
+An SSRF validator checks the URL's host once before the fetch runs. Name the state-machine gap an attacker exploits here, and cite the Manual rule id. One sentence.
+expect: (?=.*T-197)(?=.*(redirect|rebind|state.machine|resolv))
+
+# DEFSEC. Manual T-172: a default-deny gate with no secret in the CALLER is a network gate - stop spoofing, go find the primitive.
+An internal endpoint 403s every request from the public internet but 200s from an internal IP range, with no token or secret required from the caller. Name the kind of control this is and what that implies about spoofing X-Forwarded-For, and cite the Manual rule id. One sentence.
+expect: (?=.*T-172)(?=.*(network.gate|spoof))
+
+# OFFSEC. Manual T-257: a multi-tenant SSO consumer that selects the IdP token endpoint from a mutable state field, sharing one redirect URI, is an OAuth mix-up ATO.
+A multi-tenant SSO integration lets the client pick which IdP token endpoint to call via a value in the OAuth state parameter, and every tenant shares one redirect_uri. Name the attack class this enables, and cite the Manual rule id. One sentence.
+expect: (?=.*T-257)(?=.*(mix.?up|ato|account.takeover))
+
+# DEFSEC. Manual T-166: plain pipelining is the control that kills a fake smuggle.
+You think you found an HTTP request-smuggling desync between a CDN and the origin. Name the one control you must run before believing it, and say what it rules out. Cite the Manual rule id. One sentence.
+expect: (?=.*T-166)(?=.*(pipelin))
+
+# DEFSEC. Manual T-193: a valid signature or token must also bind purpose, context, transaction fields and one-use state.
+Design the binding table for a signed money-transfer request so a captured valid signature cannot be replayed to a different amount or recipient. Name at least three fields that must be inside the signed payload, and cite the Manual rule id. One sentence.
+expect: (?=.*T-193)(?=.*(amount|recipient|purpose|context))
+
+# DEFSEC. Manual T-230: a constant-length error page whose HASH varies is a CSP nonce, not varying content.
+Two error pages return the exact same byte length but a different body hash on every load. Name the defensive mechanism that commonly explains this before you conclude the content differs, and cite the Manual rule id. One sentence.
+expect: (?=.*T-230)(?=.*(csp|nonce))
+
+# OFFSEC. Manual T-58: an unbounded fixpoint loop ("strip until the output stops changing") is a defect class.
+A sanitizer strips a forbidden substring ONCE rather than looping until no instance remains. Name the general bypass technique for this defect class, and cite the Manual rule id. One sentence.
+expect: (?=.*T-58)(?=.*(nest|overlap|recurs))
+
+# DEFSEC. Manual T-165: an edge authorization filter may engage only when the credential PARSES - "unauthenticated" is a family, not one arm.
+List at least three distinct unauthenticated-request shapes you must test separately against an edge auth filter, not just "no token", and cite the Manual rule id. One sentence.
+expect: (?=.*T-165)(?=.*(malform|garbage|empty))
+
+# OFFSEC. Manual T-178: test an edge allowlist with an SNI-versus-Host desync, not with headers.
+An edge authorization filter is supposed to only admit traffic for api.internal.example.com. Name the single-request technique that tests whether it keys on the TLS SNI or the HTTP Host header, and cite the Manual rule id. One sentence.
+expect: (?=.*T-178)(?=.*(sni|desync))

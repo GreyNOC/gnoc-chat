@@ -1,0 +1,31 @@
+# --- runtime workspace state (never commit) ---
+.claude/
+targets/
+reports/
+outputs/
+out/
+*.jsonl
+
+# --- secrets (never commit) ---
+.config/
+secrets.env
+*.env
+cloud-providers.json
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+
+# --- editor / os ---
+.DS_Store
+*.swp
+*.bak
+*.bak-*
+
+# --- built download packages ---
+dist/

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GreyNOC Model Lab</title>
+<style>
+:root{--bg:#0a0e14;--panel:#0f141b;--panel2:#121a23;--line:#1e2a36;--fg:#d7e3ee;--mut:#6f8396;--acc:#39d0d8;--acc2:#7ee787;
+--warn:#e3b341;--bad:#ff6b6b;--ok:#3fb950;--mono:ui-monospace,"JetBrains Mono","DejaVu Sans Mono",Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 600px at 20% -10%,#10202b 0,var(--bg) 60%) fixed;color:var(--fg);
+font:13px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);background:rgba(10,14,20,.7);
+position:sticky;top:0;backdrop-filter:blur(6px);z-index:2}
+.logo{font:600 15px var(--mono);letter-spacing:.14em;color:var(--acc)} .logo b{color:var(--fg)}
+.pill{font:11px var(--mono);padding:3px 9px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}
+.pill.live{color:#04110a;background:var(--acc2);border-color:var(--acc2);animation:pulse 1.4s infinite}
+.pill.idle{color:var(--warn);border-color:#3a3220}
+@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(126,231,135,.08)}}
+.meta{font:12px var(--mono);color:var(--mut);margin-left:auto;text-align:right}
+main{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;padding:16px 22px 30px}
+.card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+position:relative;overflow:hidden}
+.card h3{margin:0 0 10px;font:600 11px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--mut)}
+.card h3 i{font-style:normal;color:var(--acc)}
+.c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}.c6{grid-column:span 6}.c7{grid-column:span 7}.c8{grid-column:span 8}.c12{grid-column:span 12}
+@media (max-width:1100px){.c3,.c4,.c5,.c6,.c7,.c8{grid-column:span 12}}
+.ringwrap{display:flex;align-items:center;gap:18px}
+.big{font:600 30px var(--mono)} .lbl{color:var(--mut);font-size:11px;font-family:var(--mono)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;flex:1}
+.stat b{display:block;font:600 17px var(--mono)} .stat span{font:10.5px var(--mono);color:var(--mut);letter-spacing:.06em}
+canvas{width:100%;display:block}
+#feed{height:300px;overflow:auto;font:12px var(--mono)}
+.row{display:grid;grid-template-columns:34px 40px 78px 1fr 46px 64px;gap:8px;padding:5px 4px;border-bottom:1px dashed #17222d;align-items:center;
+animation:in .35s ease-out}
+.row .n{color:var(--mut)} .row .note{grid-column:3/7;color:var(--mut);font-size:11px;margin-top:-3px}
+@keyframes in{from{opacity:0;transform:translateY(-4px)}}
+.tag{font-size:10.5px;padding:1px 6px;border-radius:5px;text-align:center}
+.tag.p{background:rgba(63,185,80,.14);color:var(--ok)} .tag.f{background:rgba(255,107,107,.13);color:var(--bad)} .tag.e{background:rgba(227,179,65,.15);color:var(--warn)}
+.cat{color:var(--acc)}
+table{width:100%;border-collapse:collapse;font:12px var(--mono)}
+th{color:var(--mut);font-weight:500;text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase}
+td{text-align:right;padding:6px 8px;border-bottom:1px solid #141d27} th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+tr.me td{background:rgba(57,208,216,.07)} tr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
+.bar{height:6px;border-radius:3px;background:#1a2632;overflow:hidden;min-width:60px}.bar i{display:block;height:100%;background:var(--acc)}
+.cur{font:12px var(--mono);color:var(--fg);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gauge-v{font:600 20px var(--mono);text-align:center;margin-top:-34px}
+.scan:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent,rgba(57,208,216,.04),transparent);
+height:40%;animation:scan 3.5s linear infinite;pointer-events:none} @keyframes scan{from{transform:translateY(-100%)}to{transform:translateY(300%)}}
+.empty{color:var(--mut);font:12px var(--mono);padding:20px 0;text-align:center}
+</style></head><body>
+<header><div class="logo">GREYNOC <b>MODEL LAB</b></div><span id="state" class="pill">connecting</span>
+<span class="pill" id="runid">-</span><div class="meta" id="hdr">127.0.0.1:11435 &middot; ollama-oc</div></header>
+<main>
+ <section class="card c5 scan" id="c-prog"><h3>Run <i>progress</i></h3>
+  <div class="ringwrap"><svg id="ring" width="150" height="150" viewBox="0 0 150 150">
+   <circle cx="75" cy="75" r="62" fill="none" stroke="#1a2632" stroke-width="11"/>
+   <circle id="ringarc" cx="75" cy="75" r="62" fill="none" stroke="url(#g1)" stroke-width="11" stroke-linecap="round"
+     stroke-dasharray="389.6" stroke-dashoffset="389.6" transform="rotate(-90 75 75)" style="transition:stroke-dashoffset .6s"/>
+   <defs><linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#39d0d8"/><stop offset="1" stop-color="#7ee787"/></linearGradient></defs>
+   <text id="ringtxt" x="75" y="73" text-anchor="middle" fill="#d7e3ee" font-family="monospace" font-size="26" font-weight="600">0%</text>
+   <text id="ringsub" x="75" y="95" text-anchor="middle" fill="#6f8396" font-family="monospace" font-size="11">0 / 0</text></svg>
+   <div class="stats">
+    <div class="stat"><b id="s-model">-</b><span>MODEL</span></div><div class="stat"><b id="s-suite">-</b><span>SUITE</span></div>
+    <div class="stat"><b id="s-pass">-</b><span>PASS RATE</span></div><div class="stat"><b id="s-score">-</b><span>SCORE SO FAR</span></div>
+    <div class="stat"><b id="s-p50">-</b><span>P50 LATENCY</span></div><div class="stat"><b id="s-ttft">-</b><span>TTFT P50</span></div>
+   </div></div>
+  <div class="cur" id="cur">waiting for a bench...</div></section>
+ <section class="card c4"><h3>Tokens/s <i>live</i></h3><canvas id="spark" height="150"></canvas>
+  <div class="lbl" id="tokl">-</div></section>
+ <section class="card c3"><h3>VRAM <i>gauge</i></h3><svg id="vg" viewBox="0 0 200 120" width="100%" height="150">
+   <path d="M20 105 A80 80 0 0 1 180 105" fill="none" stroke="#1a2632" stroke-width="14" stroke-linecap="round"/>
+   <path id="varc" d="M20 105 A80 80 0 0 1 180 105" fill="none" stroke="#e3b341" stroke-width="14" stroke-linecap="round"
+     stroke-dasharray="251.3" stroke-dashoffset="251.3" style="transition:stroke-dashoffset .6s"/>
+   <text id="vtxt" x="100" y="92" text-anchor="middle" fill="#d7e3ee" font-family="monospace" font-size="22" font-weight="600">-</text>
+   <text x="100" y="112" text-anchor="middle" fill="#6f8396" font-family="monospace" font-size="10">GB of 8 GB on GPU</text></svg></section>
+ <section class="card c4"><h3>Categories <i>radar</i></h3><svg id="radar" viewBox="0 0 300 260" width="100%" height="260"></svg></section>
+ <section class="card c4"><h3>Latency <i>histogram</i></h3><canvas id="hist" height="230"></canvas></section>
+ <section class="card c4"><h3>Task <i>feed</i></h3><div id="feed"><div class="empty">no tasks yet</div></div></section>
+ <section class="card c12"><h3>Leaderboard <i>all runs</i></h3><div id="lb"><div class="empty">no finished runs</div></div></section>
+</main>
+<script>
+const CATS=["decision","grounding","security","json","instruction","refusal"];
+const W={decision:30,grounding:20,security:20,json:10,instruction:10,refusal:10};
+let S=null, CUR="";
+const $=id=>document.getElementById(id);
+function reset(meta){S={meta:meta||{},tasks:[],total:(meta&&meta.tasks)||0,vram:null,end:null};render();}
+function pct(a,q){if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y),k=(s.length-1)*q,lo=Math.floor(k),hi=Math.min(lo+1,s.length-1);return s[lo]+(s[hi]-s[lo])*(k-lo);}
+function catScores(){const o={};for(const c of CATS){const t=S.tasks.filter(e=>e.category===c);if(t.length)o[c]=t.reduce((a,e)=>a+e.score,0)/t.length;}return o;}
+function overall(cs){let w=0,s=0;for(const c in cs){w+=W[c];s+=W[c]*cs[c];}if(!w)return 0;const p50=pct(S.tasks.map(e=>e.latency_s||0),.5);
+ return Math.max(0,100*s/w-Math.min(15,Math.max(0,(p50-20)*.5)));}
+function onEvent(e){if(!S)reset({run:e.run,model:e.model,suite:e.suite});
+ if(e.phase==="start"){S.total=e.of;S.vram=e.vram_gb;S.meta.model=e.model;S.meta.suite=e.suite;S.meta.run=e.run;S.cur="starting";}
+ else if(e.phase==="task"){S.tasks.push(e);if(e.vram_gb)S.vram=e.vram_gb;S.cur=e.i<S.total?`next: task ${e.i+1} of ${S.total}`:"finishing";}
+ else if(e.phase==="error"){S.tasks.length;feedRow(e,true);}
+ else if(e.phase==="end"){S.end=e;S.cur=`finished: overall ${(e.score*100).toFixed(1)}`;}
+ render(e);}
+function feedRow(e,err){const f=$("feed");if(f.firstChild&&f.firstChild.className==="empty")f.innerHTML="";
+ const d=document.createElement("div");d.className="row";
+ const tag=err?'<span class="tag e">ERR</span>':(e.ok?'<span class="tag p">PASS</span>':'<span class="tag f">FAIL</span>');
+ d.innerHTML=`<span class="n">#${e.i}</span>${tag}<span class="cat">${e.category||""}</span><span>${e.task||""}</span>`+
+  `<span>${(e.latency_s||0).toFixed(1)}s</span><span>${(e.tok_s||0).toFixed(1)} t/s</span><span class="note">${esc(e.note||"")}</span>`;
+ f.prepend(d);}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function render(e){if(!S)return;const n=S.tasks.length,t=S.total||n||1,fr=Math.min(1,n/t);
+ $("ringarc").style.strokeDashoffset=389.6*(1-fr);$("ringtxt").textContent=Math.round(fr*100)+"%";$("ringsub").textContent=`${n} / ${t}`;
+ $("s-model").textContent=S.meta.model||"-";$("s-suite").textContent=S.meta.suite||"-";$("runid").textContent=S.meta.run||"-";
+ const ok=S.tasks.filter(x=>x.ok).length;$("s-pass").textContent=n?`${ok}/${n}`:"-";
+ const cs=catScores();$("s-score").textContent=n?overall(cs).toFixed(1):"-";
+ const lat=S.tasks.map(x=>x.latency_s||0),tt=S.tasks.map(x=>x.ttft_s||0).filter(x=>x>0);
+ $("s-p50").textContent=n?pct(lat,.5).toFixed(1)+"s":"-";$("s-ttft").textContent=tt.length?pct(tt,.5).toFixed(2)+"s":"-";
+ $("cur").textContent=S.cur||"";
+ if(e&&e.phase==="task")feedRow(e,false);
+ spark();hist();radar(cs);vram();}
+function ctx(id){const c=$(id),r=window.devicePixelRatio||1,w=c.clientWidth,h=c.height/(c._r||1);c._r=r;c.width=w*r;c.height=h*r;
+ const g=c.getContext("2d");g.scale(r,r);return [g,w,h];}
+function spark(){const [g,w,h]=ctx("spark");const v=S.tasks.map(x=>x.tok_s||0);g.clearRect(0,0,w,h);
+ g.strokeStyle="#16212c";for(let i=1;i<4;i++){g.beginPath();g.moveTo(0,h*i/4);g.lineTo(w,h*i/4);g.stroke();}
+ if(v.length<1){return;}const mx=Math.max(...v,1)*1.15,dx=v.length>1?w/(v.length-1):w;
+ const pts=v.map((y,i)=>[v.length>1?i*dx:w/2,h-6-(h-14)*y/mx]);
+ const gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,"rgba(57,208,216,.35)");gr.addColorStop(1,"rgba(57,208,216,0)");
+ g.beginPath();g.moveTo(pts[0][0],h);pts.forEach(p=>g.lineTo(p[0],p[1]));g.lineTo(pts[pts.length-1][0],h);g.fillStyle=gr;g.fill();
+ g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.strokeStyle="#39d0d8";g.lineWidth=2;g.stroke();
+ const l=pts[pts.length-1];g.fillStyle="#7ee787";g.beginPath();g.arc(l[0],l[1],3.5,0,7);g.fill();
+ const roll=v.slice(-5).reduce((a,b)=>a+b,0)/Math.min(5,v.length);
+ $("tokl").textContent=`last ${v[v.length-1].toFixed(1)} t/s   rolling(5) ${roll.toFixed(1)}   peak ${Math.max(...v).toFixed(1)}`;}
+function hist(){const [g,w,h]=ctx("hist");g.clearRect(0,0,w,h);const v=S.tasks.map(x=>x.latency_s||0);if(!v.length)return;
+ const mx=Math.max(...v)*1.05||1,B=10,bins=new Array(B).fill(0);v.forEach(x=>bins[Math.min(B-1,Math.floor(x/mx*B))]++);
+ const top=Math.max(...bins),bw=(w-30)/B;g.font="10px monospace";g.fillStyle="#6f8396";
+ for(let i=0;i<B;i++){const bh=(h-34)*bins[i]/top,x=24+i*bw;const gr=g.createLinearGradient(0,h-20-bh,0,h-20);
+  gr.addColorStop(0,"#39d0d8");gr.addColorStop(1,"#1d5f66");g.fillStyle=gr;g.fillRect(x+2,h-20-bh,bw-4,bh);
+  if(bins[i]){g.fillStyle="#d7e3ee";g.fillText(bins[i],x+bw/2-3,h-24-bh);}}
+ g.fillStyle="#6f8396";g.fillText("0s",22,h-6);g.fillText(mx.toFixed(0)+"s",w-30,h-6);
+ const p50=pct(v,.5),x50=24+(w-30)*p50/mx;g.strokeStyle="#e3b341";g.setLineDash([4,3]);g.beginPath();g.moveTo(x50,8);g.lineTo(x50,h-20);g.stroke();
+ g.setLineDash([]);g.fillStyle="#e3b341";g.fillText("p50 "+p50.toFixed(1)+"s",Math.min(x50+4,w-70),14);}
+function radar(cs){const s=$("radar"),cx=150,cy=135,R=95;let o="";const N=CATS.length;
+ const P=(i,r)=>{const a=-Math.PI/2+i*2*Math.PI/N;return [cx+r*Math.cos(a),cy+r*Math.sin(a)];};
+ for(const f of [.25,.5,.75,1])o+=`<polygon points="${CATS.map((_,i)=>P(i,R*f).join(",")).join(" ")}" fill="none" stroke="#1e2a36"/>`;
+ CATS.forEach((c,i)=>{const [x,y]=P(i,R),[lx,ly]=P(i,R+20);o+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#1e2a36"/>`+
+  `<text x="${lx}" y="${ly+4}" text-anchor="middle" fill="${c in cs?'#d7e3ee':'#3c4a57'}" font-family="monospace" font-size="10.5">${c}${c in cs?' '+Math.round(cs[c]*100):''}</text>`;});
+ const pts=CATS.map((c,i)=>P(i,R*(cs[c]||0)).join(",")).join(" ");
+ o+=`<polygon points="${pts}" fill="rgba(57,208,216,.22)" stroke="#39d0d8" stroke-width="2" style="transition:all .5s"/>`;
+ CATS.forEach((c,i)=>{if(c in cs){const [x,y]=P(i,R*cs[c]);o+=`<circle cx="${x}" cy="${y}" r="3.5" fill="#7ee787"/>`;}});s.innerHTML=o;}
+function vram(){const v=S.vram;$("vtxt").textContent=v==null?"-":v.toFixed(2);const f=v==null?0:Math.min(1,v/8);
+ $("varc").style.strokeDashoffset=251.3*(1-f);$("varc").setAttribute("stroke",f>.92?"#ff6b6b":f>.75?"#e3b341":"#7ee787");}
+async function leaderboard(){try{const r=await (await fetch("/api/runs")).json();const rs=r.runs.sort((a,b)=>b.overall-a.overall);
+ if(!rs.length){$("lb").innerHTML='<div class="empty">no finished runs</div>';return rs;}
+ let h=`<table><tr><th>#</th><th>model / run</th><th>overall</th><th></th><th>p50</th><th>tok/s</th><th>vram</th>${CATS.map(c=>`<th>${c.slice(0,6)}</th>`).join("")}<th>pass</th></tr>`;
+ rs.forEach((s,i)=>{h+=`<tr class="${S&&S.meta.run===s.run?'me':''}" onclick="replay('${s.run}')"><td>${i+1}</td><td>${esc(s.model)} <span class="lbl">${s.suite} ${s.run.slice(0,15)}${s.tag?' ['+esc(s.tag)+']':''}</span></td>`+
+  `<td><b>${s.overall.toFixed(1)}</b></td><td><div class="bar"><i style="width:${s.overall}%"></i></div></td><td>${s.latency_p50.toFixed(1)}s</td><td>${s.tok_s_mean.toFixed(1)}</td><td>${s.vram_gb??'-'}</td>`+
+  CATS.map(c=>`<td>${s.categories[c]?Math.round(s.categories[c].score*100):'-'}</td>`).join("")+`<td>${s.passed}/${s.tasks}</td></tr>`;});
+ $("lb").innerHTML=h+"</table>";return rs;}catch(e){return [];}}
+async function replay(run){const r=await (await fetch("/api/run/"+run)).json();$("feed").innerHTML="";reset(r.meta);
+ for(const e of r.events)onEvent(e);leaderboard();}
+function setState(t,cls){const p=$("state");p.textContent=t;p.className="pill "+(cls||"");}
+let shownIdle=false;
+function connect(){const es=new EventSource("/events");
+ es.addEventListener("hello",()=>setState("connected"));
+ es.addEventListener("idle",async()=>{setState("idle","idle");if(!shownIdle){shownIdle=true;const rs=await leaderboard();
+   if(rs.length&&(!S||!S.tasks.length)){const latest=[...rs].sort((a,b)=>a.run<b.run?1:-1)[0];await replay(latest.run);S.cur="idle: showing the latest run";render();}}});
+ es.addEventListener("reset",ev=>{shownIdle=false;$("feed").innerHTML="";reset(JSON.parse(ev.data));setState("LIVE","live");});
+ es.addEventListener("lab",ev=>{setState("LIVE","live");onEvent(JSON.parse(ev.data));});
+ es.addEventListener("done",()=>{setState("done");leaderboard();});
+ es.onerror=()=>setState("reconnecting");}
+reset({});leaderboard();connect();window.addEventListener("resize",()=>S&&render());
+</script></body></html>

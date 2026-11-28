@@ -1,0 +1,2 @@
+{"url": "https://a.inscope.example", "status_code": 200, "title": "A", "tech": ["Nginx"], "host": "93.184.216.34"}
+{"url": "https://b.inscope.example", "status_code": 403, "title": "Forbidden", "tech": [], "host": "93.184.216.35"}

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# hq-web - interactive browser UI over the hunt index (datasette).
+#   hq-web [port]      default port 8001, binds 127.0.0.1
+# Opens the db IMMUTABLE (read-only, fast, no writer lock). Rebuild with `hq reindex`,
+# then restart this. Ctrl-C to stop.
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DB="${HUNT_DB:-$DIR/../.hunt-index/hunts.db}"
+PORT="${1:-8001}"
+DS="$(command -v datasette || echo "$HOME/.local/bin/datasette")"
+[ -f "$DB" ] || { echo "no db at $DB - run 'scripts/hq reindex' first" >&2; exit 1; }
+echo "Hunt Index UI -> http://127.0.0.1:$PORT   (Ctrl-C to stop)"
+exec "$DS" serve -i "$DB" \
+  --metadata "$DIR/hq-web.json" \
+  --setting sql_time_limit_ms 20000 \
+  --setting facet_time_limit_ms 8000 \
+  --setting max_returned_rows 2000 \
+  --setting truncate_cells_html 500 \
+  --setting default_page_size 50 \
+  -h 127.0.0.1 -p "$PORT"

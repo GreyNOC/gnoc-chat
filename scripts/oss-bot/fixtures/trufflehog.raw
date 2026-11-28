@@ -1,0 +1,2 @@
+{"SourceMetadata": {"Data": {"Filesystem": {"file": "/x/src/a.js", "line": 3}}}, "DetectorName": "AWS", "Verified": false, "Raw": "AKIA_FIXTURE_FAKE_00042"}
+{"SourceMetadata": {"Data": {"Filesystem": {"file": "/x/src/pay.js", "line": 5}}}, "DetectorName": "Stripe", "Verified": false, "Raw": "pk_live_FIXTUREFAKE0000000000000"}

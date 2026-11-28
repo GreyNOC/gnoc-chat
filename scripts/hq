@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# hq - query the hunt index. Thin sugar over sqlite3; raw SQL always available.
+#   hq search <fts query>        full-text across all notes/verdicts/reports
+#   hq host <substr>             which docs mention a host + its target
+#   hq hosts [substr]            our hosts (intel/captures, code noise excluded), by frequency
+#   hq stats                     dashboard: docs per role, top programs, request status spread
+#   hq target <name>             every doc for a program, newest first
+#   hq urls <substr>             distinct URLs matching
+#   hq req <host-or-url substr>  captured request/response records (method,status,url)
+#   hq reqhost [substr]          hosts we hit, request count + status codes seen
+#   hq sources <path substr>     every physical copy (live + HDD backups) of a doc
+#   hq reindex [extra roots...]  rebuild the db (add --include-decompiled via env)
+#   hq sql "<SELECT ...>"        raw SQL
+#   hq                           schema + row counts
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DB="${HUNT_DB:-$DIR/../.hunt-index/hunts.db}"
+q(){ sqlite3 -box "$DB" "$@"; }
+# every branch below interpolates user text into single-quoted SQL: a term holding a quote ends the string and
+# the rest is parsed as SQL. sq doubles the quote, which is the SQL escape, so the term stays one literal.
+sq(){ printf '%s' "${1-}" | sed "s/'/''/g"; }
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  search) raw="$*"
+          if printf '%s' "$raw" | grep -qE '"|\bAND\b|\bOR\b|\bNOT\b|\bNEAR\b'; then
+            m="$raw"                              # a deliberate FTS expression: pass it through (bound, not interpolated)
+          else                                     # free text: quote each token so FTS5 reads it as a phrase, join with OR
+            # (NOT `paste -sd' OR '`: paste cycles a delimiter LIST char by char, so 3+ tokens became
+            #  "a" "b"O"c"R"d" = AND plus bare terms o/r, which hit every minified blob and made
+            #  snippet() quadratic: 27 s per call, measured 2026-10-22)
+            m="$(printf '%s' "$raw" | tr -cs '[:alnum:]_.@-' ' ' | tr 'A-Z' 'a-z' \
+                 | tr ' ' '\n' | awk 'length($0)>2 && $0 !~ /^(the|and|for|with|from|that|this|how|was|are|its|our|all|any|has|had|can|get|got|out|into|onto|via|but|not|you|your|his|her|their|than|then|when|what|which|who|why|some|more|most|other|also|only|just|like|over|under|about|after|before|achieve|find|make|use)$/' \
+                 | awk '!seen[$0]++' | head -10 \
+                 | sed 's/.*/"&"/' | awk 'NR>1{printf " AND "}{printf "%s",$0}')"
+          fi
+          [ -n "$m" ] || { echo "hq search: nothing searchable in: $raw" >&2; exit 2; }
+          # same rows/order as SELECT d.target,d.kind,d.path,snippet(fts,0,'[',']','...',12) ... ORDER BY rank
+          # LIMIT 40, but snippet() is cost-bounded per doc (it is quadratic in hits); see hq_search.py
+          # AND is the dedup default ("did we already touch this?" wants every term; review 2026-10-22: OR
+          # gave 40 rows of which 13 held both words and pushed two real matches off the page). Only when
+          # NO document holds every term does it widen to OR, and says so.
+          out="$(python3 "$DIR/hq_search.py" "$DB" "$m")"
+          if [ -z "$out" ] && printf '%s' "$m" | grep -q ' AND '; then
+            echo "(no document holds every term; showing any-term matches)"
+            out="$(python3 "$DIR/hq_search.py" "$DB" "$(printf '%s' "$m" | sed 's/ AND / OR /g')")"
+          fi
+          if [ -n "$out" ]; then printf '%s\n' "$out"; fi;;
+  host)   q "SELECT DISTINCT d.target,h.host,d.kind,d.path FROM hosts h
+             JOIN docs d ON d.id=h.doc_id WHERE h.host LIKE '%$(sq "$*")%'
+             ORDER BY d.target LIMIT 100";;
+  hosts)  q "SELECT h.host,count(*) c FROM hosts h JOIN docs d ON d.id=h.doc_id
+             WHERE d.role!='code' AND h.host LIKE '%$(sq "${1:-}")%'
+             GROUP BY h.host ORDER BY c DESC LIMIT 100";;
+  stats)  q "SELECT role,count(*) docs FROM docs GROUP BY role;
+             SELECT target,count(*) docs FROM docs WHERE target!='' GROUP BY target ORDER BY docs DESC LIMIT 20;
+             SELECT status,count(*) reqs FROM requests GROUP BY status ORDER BY reqs DESC LIMIT 15;";;
+  target) q "SELECT kind,datetime(mtime,'unixepoch') t,path FROM docs
+             WHERE target='$1' ORDER BY mtime DESC LIMIT 100";;
+  urls)   q "SELECT DISTINCT url FROM urls WHERE url LIKE '%$(sq "${1:-}")%' LIMIT 100";;
+  req)    q "SELECT method,status,url,target FROM requests
+             WHERE url LIKE '%$1%' OR host LIKE '%$1%'
+             ORDER BY status LIMIT 100";;
+  reqhost) q "SELECT host,count(*) hits,group_concat(DISTINCT status) statuses,
+             count(DISTINCT target) progs FROM requests WHERE host LIKE '%${1:-}%'
+             GROUP BY host ORDER BY hits DESC LIMIT 100";;
+  sources) q "SELECT s.root,s.path,datetime(s.mtime,'unixepoch') t FROM sources s
+             JOIN docs d ON d.sha=s.sha WHERE d.path LIKE '%$1%'
+             ORDER BY s.mtime DESC LIMIT 100";;
+  reindex) flock "$DIR/../.hunt-index/.rebuild.lock" python3 "$DIR/hunt-index.py" ${@:+$(printf -- '--root %s ' "$@")};;
+  sql)    q "$*";;
+  "")     q "SELECT name FROM sqlite_master WHERE type IN('table','view');
+             SELECT (SELECT count(*) FROM docs) unique_docs,
+                    (SELECT count(*) FROM sources) total_copies,
+                    (SELECT count(DISTINCT host) FROM hosts) hosts,
+                    (SELECT count(DISTINCT url) FROM urls) urls;";;
+  *) echo "usage: hq {search|host|hosts|stats|target|urls|req|reqhost|sources|reindex|sql}" >&2; exit 1;;
+esac

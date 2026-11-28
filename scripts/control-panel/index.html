@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GreyNOC Desktop Rig</title>
+<style>
+  :root{
+    --bg:#0b0f10; --panel:#11181a; --panel2:#0e1517; --line:#1f2b2e;
+    --text:#d7e6e4; --dim:#7d9593; --cyan:#45e0d0; --orange:#f2a65a; --red:#ff5d6c;
+    --green:#5fe08a; --yellow:#e8d16a; --accent:#45e0d0;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font:14px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  body{padding:16px;max-width:1280px;margin:0 auto;}
+  a{color:var(--cyan)}
+  h1{font-size:16px;margin:0;letter-spacing:.04em;color:var(--text)}
+  h2{font-size:12px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
+  .top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+  .pills{display:flex;gap:8px;flex-wrap:wrap}
+  .pill{display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);
+    border-radius:20px;padding:5px 12px;font-size:12px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--red)}
+  .dot.up{background:var(--green);box-shadow:0 0 6px var(--green)}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:6px;
+    padding:6px 12px;font:inherit;cursor:pointer}
+  .btn:hover{border-color:var(--cyan);color:var(--cyan)}
+  .btn.small{padding:3px 8px;font-size:12px}
+  .grid{display:grid;grid-template-columns:1.5fr 1fr;gap:14px}
+  @media (max-width:880px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+  canvas{width:100%;height:150px;display:block}
+  .legend{display:flex;gap:16px;font-size:12px;color:var(--dim);margin-top:6px}
+  .legend span.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;color:var(--dim);font-weight:normal;padding:4px 6px;border-bottom:1px solid var(--line)}
+  td{padding:4px 6px;border-bottom:1px solid #152022;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  tr:hover td{background:#0f1719}
+  .log-wrap{max-height:260px;overflow:auto}
+  .status-ok{color:var(--green)}.status-bad{color:var(--red)}
+  .role-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .role-name{width:58px;color:var(--orange);font-weight:bold}
+  select,input[type=text],input[type=number]{background:var(--panel2);color:var(--text);
+    border:1px solid var(--line);border-radius:6px;padding:5px 8px;font:inherit}
+  select{max-width:220px}
+  .muted{color:var(--dim)}
+  .term{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px}
+  .term-out{height:220px;overflow:auto;white-space:pre-wrap;font-size:12.5px;margin-bottom:8px}
+  .term-out .cmdline{color:var(--cyan)}
+  .term-out .err{color:var(--red)}
+  .term-in{display:flex;gap:8px}
+  .term-in input{flex:1;font:inherit}
+  .prompt{color:var(--green)}
+  .kv{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--dim)}
+  .kv b{color:var(--text)}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-start;
+    justify-content:center;padding:40px 16px;z-index:10;overflow:auto}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px 24px;
+    max-width:760px;width:100%}
+  .modal h3{margin:16px 0 8px;color:var(--cyan);font-size:13px;text-transform:uppercase;letter-spacing:.06em}
+  .modal h3:first-child{margin-top:0}
+  .help-row{display:grid;grid-template-columns:320px 1fr;gap:10px;padding:5px 0;border-bottom:1px solid #152022}
+  .help-row code{color:var(--yellow)}
+  .help-row var{color:var(--orange);font-style:normal}
+  .help-legend{font-size:12px;color:var(--dim);margin-bottom:10px;line-height:1.7}
+  .close-x{float:right;cursor:pointer;color:var(--dim)}
+  .close-x:hover{color:var(--red)}
+  .flash{font-size:12px;margin-top:6px;min-height:14px}
+  .flash.ok{color:var(--green)}.flash.bad{color:var(--red)}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>&#9679; GREYNOC DESKTOP RIG</h1>
+  <div class="pills">
+    <div class="pill"><span class="dot" id="dot-local"></span>laptop <span id="local-sum" class="muted"></span></div>
+    <div class="pill"><span class="dot" id="dot-desktop"></span>desktop <span id="desktop-sum" class="muted"></span></div>
+    <button class="btn small" onclick="showHelp()">help</button>
+    <button class="btn small" onclick="pollNow()">refresh</button>
+  </div>
+</div>
+
+<div class="grid">
+  <div>
+    <div class="card">
+      <h2>traffic — laptop &lt;-&gt; desktop (last 5 min)</h2>
+      <canvas id="chart" width="900" height="150"></canvas>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--cyan)"></span>in (desktop -&gt; laptop)</span>
+        <span><span class="sw" style="background:var(--orange)"></span>out (laptop -&gt; desktop)</span>
+        <span id="rate" class="muted"></span>
+        <span id="totals" class="muted" style="margin-left:auto"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>recent requests</h2>
+      <div class="log-wrap">
+        <table>
+          <thead><tr><th>time</th><th>path</th><th>model</th><th>in</th><th>out</th><th>ms</th><th>status</th></tr></thead>
+          <tbody id="log-body"><tr><td colspan="7" class="muted">waiting for traffic...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>roles</h2>
+      <div id="roles"></div>
+      <div class="flash" id="role-flash"></div>
+    </div>
+    <div class="card">
+      <h2>desktop settings</h2>
+      <div class="role-row">
+        <span class="role-name">vram</span>
+        <input type="number" id="vram-input" step="0.1" style="width:90px">
+        <span class="muted">GB</span>
+        <button class="btn small" onclick="saveVram()">save</button>
+      </div>
+      <div class="role-row">
+        <span class="role-name">link</span>
+        <span id="link-detail" class="muted">-</span>
+      </div>
+      <div class="role-row">
+        <button class="btn small" onclick="quick('!pm2 restart desktop-proxy')">restart proxy</button>
+        <button class="btn small" onclick="quick('models desktop')">re-check link</button>
+      </div>
+      <div class="flash" id="settings-flash"></div>
+    </div>
+    <div class="card">
+      <h2>chat with the desktop</h2>
+      <div class="role-row" style="margin-bottom:8px">
+        <span class="muted">model</span>
+        <select id="chat-model" style="max-width:280px"></select>
+        <button class="btn small" onclick="clearChat()">clear</button>
+        <span id="chat-status" class="muted" style="margin-left:auto"></span>
+      </div>
+      <div id="chat-log" class="term-out" style="height:260px"></div>
+      <div class="term-in">
+        <span class="prompt">you&gt;</span>
+        <input type="text" id="chat-in" autocomplete="off" placeholder="ask the desktop's model something...">
+        <button class="btn small" id="chat-send" onclick="sendChat()">send</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>command</h2>
+      <div class="term">
+        <div class="term-out" id="term-out">type <b>help</b> for the full syntax list, or a bare gnoc command (e.g. "svc", "models desktop"). Prefix with ! for raw shell.</div>
+        <div class="term-in">
+          <span class="prompt">gnoc&gt;</span>
+          <input type="text" id="term-in" autocomplete="off" placeholder="models use brain gpt-oss:20b --on desktop">
+          <button class="btn small" onclick="sendTerm()">run</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="help-bg" onclick="if(event.target===this)hideHelp()">
+  <div class="modal">
+    <span class="close-x" onclick="hideHelp()">&#10005; close</span>
+    <h1 style="margin-bottom:4px">command syntax</h1>
+    <div class="help-legend">
+      variables: <var>&lt;role&gt;</var> = brain | chat | hunter &middot;
+      <var>&lt;model&gt;</var> = an installed model name &middot;
+      <var>&lt;GB&gt;</var> = a number &middot;
+      <var>&lt;program&gt;</var> = a platform/target handle &middot;
+      <var>&lt;n&gt;</var> = a count &middot;
+      <code>[ ]</code> = optional &middot;
+      <code>--on desktop</code> = act on the linked Windows desktop instead of the laptop
+    </div>
+    <div id="help-body"></div>
+  </div>
+</div>
+
+<script>
+// every /api/ call carries the per-process token the server injects into the page head (panel-token meta)
+const PANEL_TOKEN = (document.querySelector('meta[name="panel-token"]') || {}).content || '';
+const _fetch = window.fetch.bind(window);
+window.fetch = (u, o = {}) => _fetch(u, String(u).startsWith('/api/')
+  ? {...o, headers: {...(o.headers || {}), 'X-Panel-Token': PANEL_TOKEN}} : o);
+
+const HELP = [
+  {section: "models & the desktop GPU", items: [
+    ["models", "list installed models, which role uses each, and whether it fits the GPU"],
+    ["models --on desktop", "same, but for the linked Windows desktop"],
+    ["models desktop", "link status: tunnel up?, the desktop's models, what's loaded in VRAM"],
+    ["models desktop vram &lt;GB&gt;", "tell the rig the desktop's real GPU size (for the fits-GPU column)"],
+    ["models search &lt;words&gt;", "Hugging Face GGUF repos matching, most downloaded first"],
+    ["models files &lt;owner/repo&gt;", "quantizations available in a repo, with sizes"],
+    ["models pull &lt;owner/repo&gt;[:QUANT] [--as &lt;name&gt;] [--on desktop]", "download and install a model"],
+    ["models use &lt;role&gt; &lt;model&gt; [--on desktop]", "assign a role to a model"],
+    ["models test &lt;model&gt; [n] [--on desktop]", "run the quick benchmark suite before giving a model a role"],
+    ["models rm &lt;model&gt; [--on desktop]", "remove a model (refused while a role uses it)"],
+  ]},
+  {section: "services (pm2)", items: [
+    ["svc", "list every pm2 service (ollama-oc, desktop-proxy, orch-bot, ...)"],
+    ["svc restart &lt;name&gt;", "restart one service"],
+  ]},
+  {section: "hunt loop / orchestrator", items: [
+    ["orch", "the no-Claude orchestrator bot: status"],
+    ["orch queue | inbox | log | pause | resume", "bot sub-views and controls"],
+    ["orch auto &lt;program|target|off|plan&gt;", "let the bot pick and hunt on its own"],
+    ["pivot [program]", "no name = park current program, bot picks next; a name = hunt that program now"],
+    ["chat [\"question\"]", "ask the hunt bot a question (sees live status/report/inbox/leads)"],
+  ]},
+  {section: "reports", items: [
+    ["reports", "rebuild and print the report pipeline summary"],
+    ["inbox", "verified reports with proof of exploit only"],
+    ["inbox log [n]", "bot activity notifications"],
+    ["inbox all", "every report by stage, with paths and zips"],
+    ["ship &lt;draft-dir&gt; [--llm]", "run every pre-filing gate on one draft"],
+  ]},
+  {section: "state / control", items: [
+    ["stop | resume", "set / clear the global STOP flag"],
+    ["lock &lt;program&gt; | unlock", "pin / clear which program the loop is locked to"],
+    ["needs", "open NEEDS lines from the current handoff"],
+    ["handoff", "the current loop-state summary"],
+  ]},
+  {section: "this panel only", items: [
+    ["!&lt;shell command&gt;", "run raw bash on the laptop (same trust boundary as gnoc watch)"],
+    ["help or ?", "this screen"],
+  ]},
+];
+
+function renderHelp(){
+  const body = document.getElementById('help-body');
+  body.innerHTML = HELP.map(sec => `
+    <h3>${sec.section}</h3>
+    ${sec.items.map(([syn, desc]) => `<div class="help-row"><code>${syn}</code><span>${desc}</span></div>`).join('')}
+  `).join('');
+}
+function showHelp(){ document.getElementById('help-bg').style.display = 'flex'; }
+function hideHelp(){ document.getElementById('help-bg').style.display = 'none'; }
+renderHelp();
+
+// ---------- status polling ----------
+let lastStatus = null;
+
+function fmtGB(n){ return (n||0).toFixed(1) + ' GB'; }
+function fmtBytes(n){
+  if (n > 1e6) return (n/1e6).toFixed(2) + ' MB';
+  if (n > 1e3) return (n/1e3).toFixed(1) + ' KB';
+  return (n||0) + ' B';
+}
+
+async function fetchStatus(){
+  const r = await fetch('/api/status'); return r.json();
+}
+async function fetchTraffic(){
+  const r = await fetch('/api/traffic?seconds=300&bucket=5'); return r.json();
+}
+
+function renderStatus(s){
+  lastStatus = s;
+  const local = s.local || {}, desk = s.desktop || {};
+  document.getElementById('dot-local').className = 'dot' + (local.linked ? ' up' : '');
+  document.getElementById('dot-desktop').className = 'dot' + (desk.linked ? ' up' : '');
+  document.getElementById('local-sum').textContent = local.linked
+    ? `${fmtGB(local.vram_gb)} · ${(local.models||[]).length} models` : 'down';
+  document.getElementById('desktop-sum').textContent = desk.linked
+    ? `${fmtGB(desk.vram_gb)} · ${(desk.models||[]).length} models` : (desk.error ? 'not linked' : 'down');
+  document.getElementById('link-detail').textContent = desk.linked
+    ? `Ollama ${desk.version} via the reverse tunnel + proxy, ${(desk.loaded||[]).length} model(s) loaded in VRAM`
+    : (desk.error || 'not linked');
+  if (document.activeElement.id !== 'vram-input') {
+    document.getElementById('vram-input').value = desk.vram_gb || local.vram_gb || '';
+  }
+  renderRoles(local, desk);
+  renderChatSelect(desk);
+}
+
+let chatModelInit = false;
+function renderChatSelect(desk){
+  const sel = document.getElementById('chat-model');
+  const current = sel.value;
+  const models = (desk.models||[]).map(m => m.name.replace(/:latest$/,''));
+  if (!models.length){ sel.innerHTML = '<option value="">(no desktop models - link it first)</option>'; return; }
+  sel.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (current && models.includes(current)) sel.value = current;
+  else if (!chatModelInit){
+    const brainModel = ((desk.roles||{}).brain || '').replace('@desktop','');
+    sel.value = models.includes(brainModel) ? brainModel : models[0];
+    chatModelInit = true;
+  }
+}
+
+function allModelNames(local, desk){
+  const opts = [];
+  (local.models||[]).forEach(m => opts.push({value: m.name.replace(/:latest$/,''), label: m.name, host: 'local'}));
+  (desk.models||[]).forEach(m => opts.push({value: m.name.replace(/:latest$/,''), label: m.name + ' (desktop)', host: 'desktop'}));
+  return opts;
+}
+
+function renderRoles(local, desk){
+  const box = document.getElementById('roles');
+  const roles = local.roles || desk.roles || {};
+  const opts = allModelNames(local, desk);
+  const focused = document.activeElement;
+  ['brain','chat','hunter'].forEach(role => {
+    const selId = 'role-' + role;
+    if (focused && focused.id === selId) return; // don't yank a dropdown the user has open
+    const current = roles[role] || '';
+    let row = document.getElementById('row-' + role);
+    if (!row){
+      row = document.createElement('div');
+      row.className = 'role-row';
+      row.id = 'row-' + role;
+      row.innerHTML = `<span class="role-name">${role}</span><select id="${selId}"></select>`;
+      box.appendChild(row);
+    }
+    const sel = document.getElementById(selId);
+    sel.innerHTML = opts.map(o =>
+      `<option value="${o.host}::${o.value}" ${ (current===o.value || current===o.value+'@desktop') && ((o.host==='desktop')===current.endsWith('@desktop')) ? 'selected' : ''}>${o.label}</option>`
+    ).join('');
+    sel.onchange = () => setRole(role, sel.value);
+  });
+}
+
+async function setRole(role, val){
+  const [host, model] = val.split('::');
+  const flash = document.getElementById('role-flash');
+  flash.textContent = `setting ${role} -> ${model}${host==='desktop'?' (desktop)':''} ...`;
+  flash.className = 'flash';
+  const r = await fetch('/api/role', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({role, model, on: host})});
+  const d = await r.json();
+  flash.textContent = d.ok ? (d.out || 'done').trim().slice(-200) : ('error: ' + (d.err||'').trim().slice(-200));
+  flash.className = 'flash ' + (d.ok ? 'ok' : 'bad');
+  pollNow();
+}
+
+async function saveVram(){
+  const gb = document.getElementById('vram-input').value;
+  const flash = document.getElementById('settings-flash');
+  const r = await fetch('/api/vram', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({gb})});
+  const d = await r.json();
+  flash.textContent = d.ok ? d.out.trim() : ('error: ' + d.err);
+  flash.className = 'flash ' + (d.ok ? 'ok' : 'bad');
+  pollNow();
+}
+
+// ---------- traffic chart ----------
+function drawChart(series){
+  const c = document.getElementById('chart');
+  const ctx = c.getContext('2d');
+  const w = c.clientWidth || 900, h = 150;
+  c.width = w; c.height = h;
+  ctx.clearRect(0,0,w,h);
+  const n = series.length || 1;
+  const maxV = Math.max(1, ...series.map(p => Math.max(p.bytes_in, p.bytes_out)));
+  const pad = 6;
+  function pt(i, v){
+    const x = pad + (w-2*pad) * (i/(n-1||1));
+    const y = h - pad - (h-2*pad) * (v/maxV);
+    return [x,y];
+  }
+  function area(key, color){
+    ctx.beginPath();
+    series.forEach((p,i) => { const [x,y] = pt(i, p[key]); i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y); });
+    ctx.lineTo(w-pad, h-pad); ctx.lineTo(pad, h-pad); ctx.closePath();
+    ctx.fillStyle = color + '22'; ctx.fill();
+    ctx.beginPath();
+    series.forEach((p,i) => { const [x,y] = pt(i, p[key]); i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y); });
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  // gridlines
+  ctx.strokeStyle = '#1f2b2e'; ctx.lineWidth = 1;
+  for (let g=0; g<=3; g++){ const y = pad + (h-2*pad)*g/3; ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(w-pad,y); ctx.stroke(); }
+  area('bytes_in', '#45e0d0');
+  area('bytes_out', '#f2a65a');
+}
+
+function renderTraffic(t){
+  drawChart(t.series);
+  const last = t.series.slice(-3);
+  const inRate = last.reduce((a,p)=>a+p.bytes_in,0) / (t.bucket_seconds*last.length||1);
+  const outRate = last.reduce((a,p)=>a+p.bytes_out,0) / (t.bucket_seconds*last.length||1);
+  document.getElementById('rate').textContent = `now: ${fmtBytes(inRate)}/s in, ${fmtBytes(outRate)}/s out`;
+  document.getElementById('totals').textContent = `${t.totals.n} req / 5min · ${fmtBytes(t.totals.bytes_in)} in · ${fmtBytes(t.totals.bytes_out)} out`;
+  const body = document.getElementById('log-body');
+  if (!t.recent.length){ body.innerHTML = '<tr><td colspan="7" class="muted">no traffic yet — assign a role --on desktop to generate some</td></tr>'; return; }
+  body.innerHTML = t.recent.map(e => {
+    const ago = Math.max(0, Math.round((Date.now()/1000) - e.ts));
+    const ok = e.status >= 200 && e.status < 300;
+    return `<tr><td>${ago}s ago</td><td>${e.path}</td><td>${e.model||'-'}</td>` +
+      `<td>${fmtBytes(e.bytes_in)}</td><td>${fmtBytes(e.bytes_out)}</td><td>${e.ms}</td>` +
+      `<td class="${ok?'status-ok':'status-bad'}">${e.status||'err'}</td></tr>`;
+  }).join('');
+}
+
+async function pollNow(){
+  try { renderStatus(await fetchStatus()); } catch(e) {}
+  try { renderTraffic(await fetchTraffic()); } catch(e) {}
+}
+pollNow();
+setInterval(pollNow, 2500);
+
+// ---------- terminal ----------
+const termOut = document.getElementById('term-in');
+const histKey = 'gnoc_panel_history';
+let hist = []; try { hist = JSON.parse(localStorage.getItem(histKey)||'[]'); } catch(e){}
+let histIdx = hist.length;
+
+function printTerm(html){
+  const out = document.getElementById('term-out');
+  out.innerHTML += '\n' + html;
+  out.scrollTop = out.scrollHeight;
+}
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function quick(cmd){
+  document.getElementById('term-in').value = cmd;
+  await sendTerm();
+}
+
+async function sendTerm(){
+  const input = document.getElementById('term-in');
+  const line = input.value.trim();
+  if (!line) return;
+  input.value = '';
+  hist.push(line); histIdx = hist.length;
+  try { localStorage.setItem(histKey, JSON.stringify(hist.slice(-100))); } catch(e){}
+  printTerm(`<span class="cmdline">gnoc&gt; ${esc(line)}</span>`);
+  if (line === 'help' || line === '?'){ showHelp(); return; }
+  if (line === 'clear'){ document.getElementById('term-out').innerHTML = ''; return; }
+  const r = await fetch('/api/exec', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({cmd: line})});
+  const d = await r.json();
+  if (d.out) printTerm(esc(d.out.trim()));
+  if (d.err) printTerm(`<span class="err">${esc(d.err.trim())}</span>`);
+  if (!d.out && !d.err) printTerm('<span class="muted">(no output)</span>');
+}
+
+// ---------- chat with the desktop ----------
+let chatHistory = [];
+
+function chatBubble(role, text){
+  const log = document.getElementById('chat-log');
+  const label = role === 'user' ? 'you' : (role === 'error' ? 'error' : 'desktop');
+  const cls = role === 'user' ? 'cmdline' : (role === 'error' ? 'err' : '');
+  log.innerHTML += `<div style="margin:6px 0"><b class="${cls}">${label}:</b> ${esc(text)}</div>`;
+  log.scrollTop = log.scrollHeight;
+}
+
+async function sendChat(){
+  const input = document.getElementById('chat-in');
+  const msg = input.value.trim();
+  if (!msg) return;
+  const model = document.getElementById('chat-model').value;
+  if (!model){ chatBubble('error', 'no desktop model selected - link the desktop first'); return; }
+  input.value = '';
+  chatHistory.push({role: 'user', content: msg});
+  chatBubble('user', msg);
+  document.getElementById('chat-send').disabled = true;
+  document.getElementById('chat-status').textContent = 'thinking...';
+  try {
+    const r = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({model, messages: chatHistory})});
+    const d = await r.json();
+    if (d.ok && d.message && d.message.content){
+      chatHistory.push({role: 'assistant', content: d.message.content});
+      chatBubble('assistant', d.message.content);
+    } else {
+      chatHistory.pop(); // don't poison history with a failed turn
+      chatBubble('error', d.err || 'no reply');
+    }
+  } catch(e) {
+    chatHistory.pop();
+    chatBubble('error', String(e));
+  }
+  document.getElementById('chat-send').disabled = false;
+  document.getElementById('chat-status').textContent = '';
+}
+
+function clearChat(){
+  chatHistory = [];
+  document.getElementById('chat-log').innerHTML = '';
+}
+
+document.getElementById('chat-in').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendChat();
+});
+
+document.getElementById('term-in').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendTerm();
+  else if (e.key === 'ArrowUp'){ if (histIdx>0){ histIdx--; e.target.value = hist[histIdx]||''; } e.preventDefault(); }
+  else if (e.key === 'ArrowDown'){ if (histIdx<hist.length){ histIdx++; e.target.value = hist[histIdx]||''; } e.preventDefault(); }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideHelp(); });
+</script>
+</body>
+</html>

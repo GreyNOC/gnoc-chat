@@ -1,0 +1,149 @@
+[
+ {
+  "id": "d-draft",
+  "expect": [
+   "draft"
+  ],
+  "why": "a TIER-3 escalation has no report; draft it before sweeping more",
+  "swept": [
+   "api.alpha-lab.example",
+   "auth.alpha-lab.example"
+  ],
+  "unswept": [
+   "admin-staging.alpha-lab.example",
+   "partner-api.alpha-lab.example",
+   "www.alpha-lab.example",
+   "mail.alpha-lab.example"
+  ],
+  "queue": [],
+  "pending": [
+   "labfix_alpha         targets/labfix_alpha/hunts/auto-exposure/escalations/api.alpha-lab.example_actuator_env"
+  ],
+  "snapshot": "TIME 2026-10-21T00:00:00Z   FOCUS PROGRAM: labfix_alpha\n\nLANE QUEUE:\n  (empty)\n\nFOCUS STATS: 2 swept, 4 unswept, 3 hits, 0 leads total\n\nUNSWEPT HOST FAMILIES (largest first):\n  *.alpha-lab.example: 4 unswept, 2 swept, 3 hits+leads\n\nUNSWEPT HOSTS (copy exactly for sweep_host; small families first):\n  admin-staging.alpha-lab.example\n  partner-api.alpha-lab.example\n  www.alpha-lab.example\n  mail.alpha-lab.example\n\nRECENT SWEEPS (ALREADY DONE - never choose these hosts again):\n  auth.alpha-lab.example: fired 26 hits 0 leads 0\n  api.alpha-lab.example: fired 30 hits 3 leads 0\n\nRECENT ESCALATIONS:\n  labfix_alpha 3 https://api.alpha-lab.example/actuator/env TIER-3 secrets/credentials ['spring.datasource.password']\n\nINBOX (last 10):\n  2026-10-20T23:50Z escalated labfix_alpha: 1 TIER-3 (api.alpha-lab.example /actuator/env, credential keys), 2 TIER-1\n\nPENDING DRAFTS (TIER-3 escalations with no report):\n  labfix_alpha         targets/labfix_alpha/hunts/auto-exposure/escalations/api.alpha-lab.example_actuator_env\n\nOSINT for labfix_alpha: last 3 h ago (not due)\n\nLEARN: not due\n\nCANDIDATE PROGRAMS (ranker order; 'needs intake' is fine, pivot intakes it):\n  labfix_beta  score 41  ok\n\nYOUR LAST DECISIONS (oldest first):\n  2026-10-20T23:40:00Z escalate labfix_alpha -> started | result: 1 TIER-3, 2 TIER-1"
+ },
+ {
+  "id": "d-skipfam",
+  "expect": [
+   "skip_family"
+  ],
+  "pattern": "*.shops.alpha-lab.example",
+  "why": "30 look-alike per-customer shop hosts; 12 swept siblings had 0 hits",
+  "swept": [
+   "s0.shops.alpha-lab.example",
+   "s1.shops.alpha-lab.example",
+   "s2.shops.alpha-lab.example",
+   "s3.shops.alpha-lab.example",
+   "s4.shops.alpha-lab.example",
+   "s5.shops.alpha-lab.example",
+   "s6.shops.alpha-lab.example",
+   "s7.shops.alpha-lab.example",
+   "s8.shops.alpha-lab.example",
+   "s9.shops.alpha-lab.example",
+   "s10.shops.alpha-lab.example",
+   "s11.shops.alpha-lab.example"
+  ],
+  "unswept": [
+   "www.alpha-lab.example",
+   "mail.alpha-lab.example",
+   "shop01.shops.alpha-lab.example",
+   "shop02.shops.alpha-lab.example",
+   "shop03.shops.alpha-lab.example",
+   "shop04.shops.alpha-lab.example",
+   "shop05.shops.alpha-lab.example",
+   "shop06.shops.alpha-lab.example",
+   "shop07.shops.alpha-lab.example",
+   "shop08.shops.alpha-lab.example",
+   "shop09.shops.alpha-lab.example",
+   "shop10.shops.alpha-lab.example",
+   "shop11.shops.alpha-lab.example",
+   "shop12.shops.alpha-lab.example",
+   "shop13.shops.alpha-lab.example",
+   "shop14.shops.alpha-lab.example",
+   "shop15.shops.alpha-lab.example",
+   "shop16.shops.alpha-lab.example",
+   "shop17.shops.alpha-lab.example",
+   "shop18.shops.alpha-lab.example",
+   "shop19.shops.alpha-lab.example",
+   "shop20.shops.alpha-lab.example",
+   "shop21.shops.alpha-lab.example",
+   "shop22.shops.alpha-lab.example",
+   "shop23.shops.alpha-lab.example",
+   "shop24.shops.alpha-lab.example",
+   "shop25.shops.alpha-lab.example",
+   "shop26.shops.alpha-lab.example",
+   "shop27.shops.alpha-lab.example",
+   "shop28.shops.alpha-lab.example",
+   "shop29.shops.alpha-lab.example",
+   "shop30.shops.alpha-lab.example"
+  ],
+  "queue": [],
+  "pending": [],
+  "snapshot": "TIME 2026-10-21T00:00:00Z   FOCUS PROGRAM: labfix_alpha\n\nLANE QUEUE:\n  (empty)\n\nFOCUS STATS: 12 swept, 32 unswept, 0 hits, 0 leads total\n\nUNSWEPT HOST FAMILIES (largest first):\n  *.shops.alpha-lab.example: 30 unswept, 12 swept, 0 hits+leads\n  *.alpha-lab.example: 2 unswept, 0 swept, 0 hits+leads\n\nUNSWEPT HOSTS (copy exactly for sweep_host; small families first):\n  www.alpha-lab.example\n  mail.alpha-lab.example\n  shop01.shops.alpha-lab.example\n  shop02.shops.alpha-lab.example\n  shop03.shops.alpha-lab.example\n  shop04.shops.alpha-lab.example\n  shop05.shops.alpha-lab.example\n  shop06.shops.alpha-lab.example\n  shop07.shops.alpha-lab.example\n  shop08.shops.alpha-lab.example\n  shop09.shops.alpha-lab.example\n  shop10.shops.alpha-lab.example\n  shop11.shops.alpha-lab.example\n  shop12.shops.alpha-lab.example\n  shop13.shops.alpha-lab.example\n  shop14.shops.alpha-lab.example\n  shop15.shops.alpha-lab.example\n  shop16.shops.alpha-lab.example\n  shop17.shops.alpha-lab.example\n  shop18.shops.alpha-lab.example\n  shop19.shops.alpha-lab.example\n  shop20.shops.alpha-lab.example\n  shop21.shops.alpha-lab.example\n  shop22.shops.alpha-lab.example\n  shop23.shops.alpha-lab.example\n  shop24.shops.alpha-lab.example\n  shop25.shops.alpha-lab.example\n  shop26.shops.alpha-lab.example\n  shop27.shops.alpha-lab.example\n  shop28.shops.alpha-lab.example\n  shop29.shops.alpha-lab.example\n  shop30.shops.alpha-lab.example\n\nRECENT SWEEPS (ALREADY DONE - never choose these hosts again):\n  s2.shops.alpha-lab.example: fired 24 hits 0 leads 0\n  s3.shops.alpha-lab.example: fired 24 hits 0 leads 0\n  s4.shops.alpha-lab.example: fired 24 hits 0 leads 0\n  s5.shops.alpha-lab.example: fired 24 hits 0 leads 0\n  s6.shops.alpha-lab.example: fired 24 hits 0 leads 0\n  s7.shops.alpha-lab.example: fired 24 hits 0 leads 0\n  s8.shops.alpha-lab.example: fired 24 hits 0 leads 0\n  s9.shops.alpha-lab.example: fired 24 hits 0 leads 0\n  s10.shops.alpha-lab.example: fired 24 hits 0 leads 0\n  s11.shops.alpha-lab.example: fired 24 hits 0 leads 0\n\nRECENT ESCALATIONS:\n  (none)\n\nINBOX (last 10):\n  2026-10-20T23:00Z auto-hunt labfix_alpha: s11.shops.alpha-lab.example 0 hits\n\nPENDING DRAFTS (TIER-3 escalations with no report):\n  (none)\n\nOSINT for labfix_alpha: last 3 h ago (not due)\n\nLEARN: not due\n\nCANDIDATE PROGRAMS (ranker order; 'needs intake' is fine, pivot intakes it):\n  labfix_beta  score 41  ok\n\nYOUR LAST DECISIONS (oldest first):\n  2026-10-20T23:18:00Z sweep_host s8.shops.alpha-lab.example -> started | result: 0 hits\n  2026-10-20T23:19:00Z sweep_host s9.shops.alpha-lab.example -> started | result: 0 hits\n  2026-10-20T23:20:00Z sweep_host s10.shops.alpha-lab.example -> started | result: 0 hits\n  2026-10-20T23:21:00Z sweep_host s11.shops.alpha-lab.example -> started | result: 0 hits"
+ },
+ {
+  "id": "d-queue",
+  "expect": [
+   "run_queue"
+  ],
+  "why": "GreyNOC queued a deliberate lane",
+  "swept": [
+   "api.alpha-lab.example"
+  ],
+  "unswept": [
+   "admin-staging.alpha-lab.example",
+   "partner-api.alpha-lab.example",
+   "www.alpha-lab.example",
+   "mail.alpha-lab.example"
+  ],
+  "queue": [
+   "labfix_alpha partner-api-authz-20261020 .claude/state/opencode/briefs/partner-api-authz.md"
+  ],
+  "pending": [],
+  "snapshot": "TIME 2026-10-21T00:00:00Z   FOCUS PROGRAM: labfix_alpha\n\nLANE QUEUE:\n  labfix_alpha partner-api-authz-20261020 .claude/state/opencode/briefs/partner-api-authz.md\n\nFOCUS STATS: 1 swept, 4 unswept, 0 hits, 1 leads total\n\nUNSWEPT HOST FAMILIES (largest first):\n  *.alpha-lab.example: 4 unswept, 1 swept, 1 hits+leads\n\nUNSWEPT HOSTS (copy exactly for sweep_host; small families first):\n  admin-staging.alpha-lab.example\n  partner-api.alpha-lab.example\n  www.alpha-lab.example\n  mail.alpha-lab.example\n\nRECENT SWEEPS (ALREADY DONE - never choose these hosts again):\n  api.alpha-lab.example: fired 28 hits 0 leads 1\n\nFOCUS LEADS (newest):\n  - 2026-10-20T23:30Z basic-auth 401 https://partner-api.alpha-lab.example/actuator (raw/partner-api-act.resp)\n\nRECENT ESCALATIONS:\n  (none)\n\nINBOX (last 10):\n  2026-10-20T23:31Z lane queued by GreyNOC: partner-api-authz-20261020\n\nPENDING DRAFTS (TIER-3 escalations with no report):\n  (none)\n\nOSINT for labfix_alpha: last 3 h ago (not due)\n\nLEARN: not due\n\nCANDIDATE PROGRAMS (ranker order; 'needs intake' is fine, pivot intakes it):\n  labfix_beta  score 41  ok\n\nYOUR LAST DECISIONS (oldest first):\n  (none)"
+ },
+ {
+  "id": "d-escalate",
+  "expect": [
+   "escalate"
+  ],
+  "why": "fresh hits on the focus program are not escalated yet",
+  "swept": [
+   "api-staging.alpha-lab.example",
+   "auth.alpha-lab.example"
+  ],
+  "unswept": [
+   "admin-staging.alpha-lab.example",
+   "partner-api.alpha-lab.example",
+   "www.alpha-lab.example",
+   "mail.alpha-lab.example"
+  ],
+  "queue": [],
+  "pending": [],
+  "snapshot": "TIME 2026-10-21T00:00:00Z   FOCUS PROGRAM: labfix_alpha\n\nLANE QUEUE:\n  (empty)\n\nFOCUS STATS: 2 swept, 4 unswept, 4 hits, 0 leads total\n\nUNSWEPT HOST FAMILIES (largest first):\n  *.alpha-lab.example: 4 unswept, 2 swept, 4 hits+leads\n\nUNSWEPT HOSTS (copy exactly for sweep_host; small families first):\n  admin-staging.alpha-lab.example\n  partner-api.alpha-lab.example\n  www.alpha-lab.example\n  mail.alpha-lab.example\n\nRECENT SWEEPS (ALREADY DONE - never choose these hosts again):\n  auth.alpha-lab.example: fired 26 hits 0 leads 0\n  api-staging.alpha-lab.example: fired 31 hits 4 leads 0\n\nFOCUS LEADS (newest):\n  - 2026-10-20T23:55Z swagger 200 https://api-staging.alpha-lab.example/v2/api-docs (raw/api-staging-swagger.resp)\n  - 2026-10-20T23:55Z actuator 200 https://api-staging.alpha-lab.example/actuator/env (raw/api-staging-env.resp)\n\nRECENT ESCALATIONS:\n  (none)\n\nINBOX (last 10):\n  2026-10-20T23:56Z auto-hunt labfix_alpha: api-staging.alpha-lab.example 4 hits, not escalated yet\n\nPENDING DRAFTS (TIER-3 escalations with no report):\n  (none)\n\nOSINT for labfix_alpha: last 3 h ago (not due)\n\nLEARN: not due\n\nCANDIDATE PROGRAMS (ranker order; 'needs intake' is fine, pivot intakes it):\n  labfix_beta  score 41  ok\n\nYOUR LAST DECISIONS (oldest first):\n  2026-10-20T23:45:00Z sweep_host api-staging.alpha-lab.example -> started | result: 4 hits"
+ },
+ {
+  "id": "d-sweephost",
+  "expect": [
+   "sweep_host"
+  ],
+  "host": "admin-staging.alpha-lab.example",
+  "bad_hosts": [
+   "api.alpha-lab.example",
+   "www.alpha-lab.example"
+  ],
+  "why": "one high-value unswept host remains; api is already swept (choosing it is the known-bad answer)",
+  "swept": [
+   "api.alpha-lab.example",
+   "www.alpha-lab.example"
+  ],
+  "unswept": [
+   "admin-staging.alpha-lab.example",
+   "img1.cdn.alpha-lab.example",
+   "img2.cdn.alpha-lab.example",
+   "img3.cdn.alpha-lab.example"
+  ],
+  "queue": [],
+  "pending": [],
+  "snapshot": "TIME 2026-10-21T00:00:00Z   FOCUS PROGRAM: labfix_alpha\n\nLANE QUEUE:\n  (empty)\n\nFOCUS STATS: 2 swept, 4 unswept, 0 hits, 0 leads total\n\nUNSWEPT HOST FAMILIES (largest first):\n  *.cdn.alpha-lab.example: 3 unswept, 0 swept, 0 hits+leads\n  *.alpha-lab.example: 1 unswept, 2 swept, 0 hits+leads\n\nUNSWEPT HOSTS (copy exactly for sweep_host; small families first):\n  admin-staging.alpha-lab.example\n  img1.cdn.alpha-lab.example\n  img2.cdn.alpha-lab.example\n  img3.cdn.alpha-lab.example\n\nRECENT SWEEPS (ALREADY DONE - never choose these hosts again):\n  www.alpha-lab.example: fired 22 hits 0 leads 0\n  api.alpha-lab.example: fired 30 hits 0 leads 0\n\nRECENT ESCALATIONS:\n  (none)\n\nINBOX (last 10):\n  2026-10-20T23:20Z auto-hunt labfix_alpha: api.alpha-lab.example 0 hits\n\nPENDING DRAFTS (TIER-3 escalations with no report):\n  (none)\n\nOSINT for labfix_alpha: last 3 h ago (not due)\n\nLEARN: not due\n\nCANDIDATE PROGRAMS (ranker order; 'needs intake' is fine, pivot intakes it):\n  labfix_beta  score 41  ok\n\nYOUR LAST DECISIONS (oldest first):\n  (none)"
+ }
+]

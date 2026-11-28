@@ -1,0 +1,37 @@
+{
+  "title": "Hunt Index",
+  "description_html": "Queryable map over all hunt data (live + HDD backups). Use the canned queries below, browse tables, or write SQL.",
+  "databases": {
+    "hunts": {
+      "tables": {
+        "docs": { "fts_table": "fts", "fts_pk": "id",
+          "facets": ["role", "kind", "target", "ext"],
+          "sort_desc": "mtime" },
+        "requests": { "facets": ["status", "method", "target"] },
+        "hosts": { "facets": ["host"] }
+      },
+      "queries": {
+        "search": {
+          "sql": "SELECT d.target, d.kind, d.path, snippet(fts,0,'<b>','</b>','…',15) AS hit FROM fts JOIN docs d ON d.id = fts.rowid WHERE fts MATCH :q ORDER BY rank LIMIT 200",
+          "title": "Full-text search (notes/verdicts/reports/captures)"
+        },
+        "host": {
+          "sql": "SELECT DISTINCT d.target, h.host, d.kind, d.path FROM hosts h JOIN docs d ON d.id = h.doc_id WHERE h.host LIKE '%' || :host || '%' ORDER BY d.target LIMIT 500",
+          "title": "Docs mentioning a host"
+        },
+        "requests_by_host": {
+          "sql": "SELECT method, status, url, target FROM requests WHERE host LIKE '%' || :host || '%' ORDER BY status LIMIT 500",
+          "title": "Captured requests for a host"
+        },
+        "program_docs": {
+          "sql": "SELECT kind, role, datetime(mtime,'unixepoch') AS t, path FROM docs WHERE target = :program ORDER BY mtime DESC LIMIT 500",
+          "title": "Every doc for a program"
+        },
+        "top_programs": {
+          "sql": "SELECT target, count(*) AS docs FROM docs WHERE target != '' GROUP BY target ORDER BY docs DESC LIMIT 100",
+          "title": "Doc count per program"
+        }
+      }
+    }
+  }
+}

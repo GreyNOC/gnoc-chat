@@ -1,0 +1,1 @@
+{"results": [{"check_id": "oss-bot.postmessage-no-origin-check", "path": "/x/js/app.js", "start": {"line": 12}, "extra": {"message": "message listener without origin check", "severity": "WARNING", "lines": "window.addEventListener('message', function(e){ eval(e.data) })"}}], "errors": []}

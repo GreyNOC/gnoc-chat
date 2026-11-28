@@ -1,0 +1,25 @@
+{
+  "_doc": "Intel sources. kind: h1 | ghsa | rss | json | html. tier 1 = vendor or program, tier 2 = reputable individual (robots.txt obeyed, cards carry trust 2 = unverified technique). verified=false means the URL was written from memory and has not been fetched yet: the first live run records its HTTP status in state.json (gnoc intel status). Edit freely; never add a source that needs a login.",
+  "sources": [
+    {"name": "h1", "kind": "h1", "url": "https://hackerone.com/graphql", "tier": 1, "trust": 1, "enabled": true, "verified": true,
+     "note": "token-free CompleteHacktivityReportIndex, query shape from research/xbow/LEG1-H1-DISCLOSURE.md; body from /reports/<id>.json"},
+    {"name": "ghsa", "kind": "ghsa", "url": "https://api.github.com/advisories?type=reviewed&sort=published&direction=desc", "tier": 1, "trust": 1, "enabled": true, "verified": false,
+     "note": "token-free REST, 60 requests/hour unauthenticated"},
+    {"name": "portswigger", "kind": "rss", "url": "https://portswigger.net/research/rss", "tier": 1, "trust": 1, "enabled": true, "verified": false},
+    {"name": "projectzero", "kind": "rss", "url": "https://googleprojectzero.blogspot.com/feeds/posts/default", "tier": 1, "trust": 1, "enabled": true, "verified": false},
+    {"name": "assetnote", "kind": "rss", "url": "https://www.assetnote.io/resources/research/rss.xml", "tier": 1, "trust": 1, "enabled": true, "verified": false,
+     "note": "Assetnote research moved under Searchlight Cyber in 2025; if this 404s try https://slcyber.io/feed/"},
+    {"name": "projectdiscovery", "kind": "rss", "url": "https://projectdiscovery.io/blog/rss.xml", "tier": 1, "trust": 1, "enabled": true, "verified": false},
+    {"name": "intigriti", "kind": "rss", "url": "https://www.intigriti.com/feed", "tier": 1, "trust": 1, "enabled": true, "verified": false},
+    {"name": "yeswehack", "kind": "rss", "url": "https://www.yeswehack.com/feed", "tier": 1, "trust": 1, "enabled": true, "verified": false},
+    {"name": "bugcrowd", "kind": "rss", "url": "https://www.bugcrowd.com/feed/", "tier": 1, "trust": 1, "enabled": true, "verified": false},
+    {"name": "kettle", "kind": "rss", "url": "https://www.skeletonscribe.net/feeds/posts/default", "tier": 2, "trust": 2, "enabled": true, "verified": false,
+     "note": "James Kettle's own blog; most of his research is on the portswigger feed"},
+    {"name": "samcurry", "kind": "rss", "url": "https://samcurry.net/rss.xml", "tier": 2, "trust": 2, "enabled": true, "verified": false},
+    {"name": "orangetsai", "kind": "rss", "url": "https://blog.orange.tw/feed.xml", "tier": 2, "trust": 2, "enabled": true, "verified": false},
+    {"name": "pentesterland", "kind": "json", "url": "https://pentester.land/writeups.json", "tier": 2, "trust": 2, "enabled": false, "verified": false,
+     "note": "spec says verify it still exists before enabling; disabled until a live fetch returns a JSON list"},
+    {"name": "ctbb", "kind": "rss", "url": "https://feeds.transistor.fm/critical-thinking-bug-bounty-podcast", "tier": 2, "trust": 2, "enabled": false, "verified": false,
+     "note": "Critical Thinking podcast show notes; feed URL unverified, disabled until checked"}
+  ]
+}

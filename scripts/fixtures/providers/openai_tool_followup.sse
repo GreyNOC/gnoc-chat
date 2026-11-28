@@ -1,0 +1,6 @@
+data: {"id":"chatcmpl-fixtureFollowup","object":"chat.completion.chunk","created":1764115200,"model":"deepseek-chat","choices":[{"index":0,"delta":{"role":"assistant","content":"The directory has 2 files."},"finish_reason":"stop"}]}
+
+data: {"id":"chatcmpl-fixtureFollowup","object":"chat.completion.chunk","created":1764115200,"model":"deepseek-chat","choices":[],"usage":{"prompt_tokens":950,"completion_tokens":8,"total_tokens":958,"prompt_cache_hit_tokens":896,"prompt_cache_miss_tokens":54}}
+
+data: [DONE]
+

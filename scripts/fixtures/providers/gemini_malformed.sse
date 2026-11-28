@@ -1,0 +1,2 @@
+data: {"candidates": [{"content": {"role": "model"},"finishReason": "MALFORMED_FUNCTION_CALL","finishMessage": "Malformed function call: print(default_api.read_file(path=src/))","index": 0}],"usageMetadata": {"promptTokenCount": 880,"totalTokenCount": 880},"modelVersion": "gemini-2.5-flash","responseId": "fixtureMalformedResponse"}
+

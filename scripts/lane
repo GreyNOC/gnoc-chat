@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# lane <TAG> : run the exact probe command for TAG from $LANE_PROBES (set by scripts/opencode-lane.sh).
+# Exists so a small worker model types two tokens instead of retyping a 250-char command (it mangles paths).
+set -u
+TAG=${1:?usage: lane <TAG>}
+F=${LANE_PROBES:?LANE_PROBES not set (run through scripts/opencode-lane.sh)}
+CMD=$(grep -m1 "^${TAG}|" "$F" | cut -d'|' -f2-)
+[ -n "$CMD" ] || { echo "lane: no probe tagged $TAG in $F"; exit 3; }
+cd ${GNOC_WORKSPACE:-$HOME/.gnoc} && eval "$CMD"

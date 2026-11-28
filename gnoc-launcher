@@ -1,0 +1,93 @@
+#!/bin/sh
+# gnoc launcher - runs gnoc chat from this folder inside its own private Python environment.
+# Installed as `gnoc` on your PATH by install.sh (or /usr/bin/gnoc by the .deb). Safe to run again.
+set -e
+
+# Where this folder really is, even when we were started through a symlink.
+self="$0"
+while [ -h "$self" ]; do
+  dir="$(cd -P "$(dirname "$self")" && pwd)"
+  self="$(readlink "$self")"
+  case "$self" in /*) ;; *) self="$dir/$self" ;; esac
+done
+APP="$(cd -P "$(dirname "$self")" && pwd)"
+
+PY="${PYTHON:-python3}"
+
+# `gnoc update` (scripts/gnoc_update.py) runs on the system Python, before the private environment: it
+# uses only the standard library, and the release it installs may need a different environment.
+if [ "${1:-}" = "update" ]; then
+  shift
+  exec "$PY" "$APP/scripts/gnoc_update.py" update "$@"
+fi
+VENV="${GNOC_VENV:-$HOME/.local/share/gnoc-chat/venv}"
+: "${GNOC_WORKSPACE:=$HOME/.gnoc}"
+export GNOC_WORKSPACE
+export GNOC_WS="$GNOC_WORKSPACE"
+# The public build accepts any model you choose (set GNOC_ALLOW_STOCK=0 to allow only uncensored builds).
+: "${GNOC_ALLOW_STOCK:=1}"
+export GNOC_ALLOW_STOCK
+
+# First run (or requirements changed): build the private environment. Nothing touches the system Python.
+want="$(cksum < "$APP/requirements.txt" | cut -d' ' -f1)"
+have="$(cat "$VENV/.gnoc-requirements" 2>/dev/null || true)"
+if [ ! -x "$VENV/bin/python" ] || [ "$want" != "$have" ]; then
+  echo "gnoc: setting up its Python environment in $VENV (one time, about a minute)..." >&2
+  if ! "$PY" -m venv "$VENV" >/dev/null 2>&1; then
+    echo "gnoc: could not create a Python virtual environment." >&2
+    # Termux has no sudo or apt-get advice that works; its python package carries venv already
+    if [ -n "${TERMUX_VERSION:-}" ] || case "${PREFIX:-}" in */com.termux/files/usr) true ;; *) false ;; esac; then
+      echo "      Inside Termux run:  pkg install python   then try again." >&2
+    else
+      echo "      On Debian/Ubuntu run:  sudo apt install python3-venv   then try again." >&2
+    fi
+    exit 1
+  fi
+  "$VENV/bin/python" -m pip install --quiet --disable-pip-version-check --require-hashes -r "$APP/requirements.txt" >&2
+  echo "$want" > "$VENV/.gnoc-requirements"
+fi
+
+# Your workspace holds your settings, notes and history. It points back at the program files.
+mkdir -p "$GNOC_WORKSPACE"
+for d in scripts docs; do
+  link="$GNOC_WORKSPACE/$d"
+  if [ -h "$link" ] || [ ! -e "$link" ]; then
+    ln -sfn "$APP/$d" "$link"
+  fi
+done
+
+# The hunt harness's folders, and its hooks (scope-gate.sh above all) where the code looks for them:
+# gnoc_setup.ensure_workspace() COPIES harness/hooks into the workspace's .claude/hooks (never a link, so the agent's
+# write guard on .claude/hooks/ holds), stamps the copy with this release, never touches a .claude/hooks it did not
+# make, and installs it only while jq exists (the hook allows everything without jq; with no hook gnoc checks bash
+# scope itself and refuses instead). Python runs only when something changed: a missing folder, a new release, jq.
+stamp="$APP $(cat "$APP/VERSION" 2>/dev/null || echo unversioned)"
+have="$(cat "$GNOC_WORKSPACE/.claude/hooks/.gnoc-shipped" 2>/dev/null || true)"
+need=0
+[ -d "$GNOC_WORKSPACE/.claude/state/hunt-loop" ] && [ -d "$GNOC_WORKSPACE/reports/drafts" ] || need=1
+if [ -d "$APP/harness/hooks" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    { [ ! -e "$GNOC_WORKSPACE/.claude/hooks" ] || [ -n "$have" ]; } && [ "$have" != "$stamp" ] && need=1
+  else
+    [ -n "$have" ] && need=1
+  fi
+fi
+if [ "$need" = 1 ]; then
+  "$VENV/bin/python" "$APP/scripts/gnoc_setup.py" --workspace >/dev/null 2>&1 || true
+fi
+
+PATH="$VENV/bin:$PATH"
+export PATH
+# Once a day, in a terminal, when a newer release is out: ask to install it (or, with `gnoc update --auto on`,
+# install it). The check itself runs in the background, so this never waits on the network when there is
+# nothing new. GNOC_NO_UPDATE_CHECK=1 turns it off. After an install, `notice` prints the new release's
+# launcher on stdout and this one hands over to it, so the chat opens on the new version.
+if [ "${GNOC_NO_UPDATE_CHECK:-0}" != "1" ] && [ -t 0 ] && [ -t 2 ] && [ -f "$APP/scripts/gnoc_update.py" ]; then
+  new="$("$VENV/bin/python" "$APP/scripts/gnoc_update.py" notice || true)"
+  if [ -z "${GNOC_JUST_UPDATED:-}" ] && [ -n "$new" ] && [ -x "$new" ] && [ "$new" != "$APP/gnoc-launcher" ]; then
+    GNOC_JUST_UPDATED=1
+    export GNOC_JUST_UPDATED
+    exec "$new" "$@"
+  fi
+fi
+exec "$VENV/bin/python" "$APP/scripts/gnoc" "$@"

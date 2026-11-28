@@ -1,0 +1,550 @@
+#!/usr/bin/python3 -I
+"""gnoc-defender-helper - the ONLY root actions /mode defender can take on its own, each one reversible.
+
+Installed root-owned (a copy, never the workspace file, so the chat user cannot rewrite what runs as root):
+
+    sudo install -o root -g root -m 0755 scripts/gnoc-defender-helper /usr/local/sbin/gnoc-defender-helper
+    echo "$USER ALL=(root) NOPASSWD: /usr/local/sbin/gnoc-defender-helper" | sudo tee /etc/sudoers.d/gnoc-defender
+    sudo chmod 0440 /etc/sudoers.d/gnoc-defender && sudo visudo -cf /etc/sudoers.d/gnoc-defender
+
+Verbs (everything else is refused):
+    status                      the defender table, its live blocks, and this helper's version
+    block <ip> <ttl-seconds>    drop one PUBLIC address for 60..86400 s (nft set element with a timeout:
+                                it removes itself; nothing permanent is ever written)
+    unblock <ip>                remove that element now
+    quarantine <ip> <ttl> [mac] drop one PRIVATE/LAN address on THIS host for 60..86400 s (same timeout set);
+                                the gateway, this host, admin peers and live admin sessions are refused
+    release <ip>                remove a quarantine now
+    isolate <ttl> [allow-ip...] cut this endpoint's other traffic for 60..86400 s while keeping loopback,
+                                the live admin peer, the gateway and the configured DNS servers reachable;
+                                prints a one-time token
+    unisolate <token>           remove the isolation table now (the token isolate printed: the contained
+                                account cannot read it, so it cannot lift its own containment)
+    sysctl <key> <value>        runtime only (gone at reboot): HARDENING values only (below); the value it
+                                replaces is recorded root-only
+    sysctl-undo <key>           put back the value recorded when this helper hardened <key>, and nothing else
+    pause <pid> / resume <pid>  SIGSTOP / SIGCONT; a paused process keeps its memory and resumes intact
+    kill <pid>                  SIGTERM, then SIGKILL; protected system processes are refused
+    flush [token]               delete the defender table (every block at once); with the isolation token, the
+                                isolation table too
+
+Anti-lockout, enforced HERE and not in the chat (the user drives this box remotely): a non-global address is
+never BLOCKED, and a quarantine refuses the gateway, this host, and any address that currently holds an
+established connection to sshd or a remote-desktop daemon. Isolation requires a live admin peer (or an
+explicit allow address), and protected processes are never paused or killed.
+"""
+import ipaddress
+import json
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
+
+VERSION = "4"
+TABLE = "gnoc_defender"
+LOG = "/var/log/gnoc-defender.log"
+SYSCTL = {
+    "net.ipv4.tcp_syncookies": {"1"}, "net.ipv4.conf.all.rp_filter": {"1", "2"},
+    "net.ipv4.conf.all.accept_redirects": {"0"}, "net.ipv4.conf.default.accept_redirects": {"0"},
+    "net.ipv6.conf.all.accept_redirects": {"0"}, "net.ipv4.conf.all.send_redirects": {"0"},
+    "net.ipv4.conf.all.accept_source_route": {"0"}, "net.ipv4.icmp_echo_ignore_broadcasts": {"1"},
+    "net.ipv4.conf.all.log_martians": {"1"}, "kernel.randomize_va_space": {"2"}, "kernel.kptr_restrict": {"1", "2"},
+    "kernel.dmesg_restrict": {"1"}, "kernel.yama.ptrace_scope": {"1", "2"},
+    "kernel.unprivileged_bpf_disabled": {"1", "2"}, "fs.protected_symlinks": {"1"}, "fs.protected_hardlinks": {"1"},
+    "fs.protected_fifos": {"1", "2"}, "fs.protected_regular": {"1", "2"}, "fs.suid_dumpable": {"0"},
+}
+# An undo puts back the value this helper RECORDED before it hardened a key, read from a root-only file: the old
+# `sysctl <key> <any of 0/1/2>` let any process running as the sudoers user turn ASLR, protected_symlinks or
+# ptrace_scope OFF with no password (QAQC 2026-11-19).
+STATE_DIR = "/var/lib/gnoc-defender"
+SYSCTL_RECORD = os.path.join(STATE_DIR, "sysctl-before.json")
+ISO_TOKEN = "/run/gnoc-isolate.token"
+# Protected by NAME and by WHERE IT RUNS FROM: a process named "sshd" running out of /tmp is not sshd, and must
+# stay containable (QAQC 2026-11-19: a miner renamed to sshd could never be paused or killed). Security daemons
+# are protected too, so the helper cannot be used to switch off auditing or an EDR agent.
+SYSTEM_EXE_DIRS = ("/usr/sbin/", "/usr/bin/", "/sbin/", "/bin/", "/usr/lib/", "/usr/libexec/", "/lib/",
+                   "/usr/local/sbin/", "/opt/")
+PROTECTED = {"systemd", "init", "sshd", "sshd-session", "sshd-auth", "dbus-daemon", "dbus-broker", "polkitd",
+             "auditd", "fail2ban-server", "falcon-sensor", "osqueryd", "wazuh-agentd", "ossec-agentd", "clamd",
+             "freshclam", "apparmor", "dockerd", "containerd", "snapd", "chronyd", "systemd-timesyncd",
+             "NetworkManager", "wpa_supplicant", "systemd-logind", "systemd-journal", "systemd-resolve",
+             "systemd-network", "login", "agetty", "Xorg", "Xwayland", "gnome-shell", "kwin_x11", "kwin_wayland",
+             "plasmashell", "gdm", "gdm3", "sddm", "lightdm", "xrdp", "xrdp-sesman", "x11vnc", "Xvnc",
+             "rustdesk", "anydesk", "teamviewerd", "tmux: server", "tmux", "screen", "tailscaled", "openvpn",
+             "cron", "rsyslogd", "systemd-udevd", "sudo"}
+ADMIN_PROCS = {"sshd", "sshd-session", "xrdp", "x11vnc", "Xvnc", "rustdesk", "anydesk", "teamviewerd"}
+PATH = "/usr/sbin:/usr/bin:/sbin:/bin"
+
+
+def die(msg, rc=2):
+    print("REFUSED: " + msg)
+    sys.exit(rc)
+
+
+def run(argv, inp=None):
+    p = subprocess.run(argv, input=inp, capture_output=True, text=True, env={"PATH": PATH, "LC_ALL": "C"},
+                       timeout=30)
+    return p.returncode, (p.stdout + p.stderr).strip()
+
+
+def log(line):
+    try:
+        with open(LOG, "a") as fh:
+            fh.write(time.strftime("%Y-%m-%dT%H:%M:%S ") + f"uid={os.environ.get('SUDO_UID', '?')} {line}\n")
+    except OSError:
+        pass
+
+
+def admin_peers():
+    """Every address holding an established connection to sshd or a remote-desktop daemon right now."""
+    rc, txt = run(["ss", "-H", "-tnp", "state", "established"])
+    out = set()
+    for ln in txt.splitlines():
+        m = re.search(r'users:\(\("([^"]+)"', ln)
+        f = ln.split()
+        if not m or len(f) < 4:
+            continue
+        if m.group(1) in ADMIN_PROCS:
+            peer = f[3].rpartition(":")[0].strip("[]").split("%")[0]
+            out.add(peer[7:] if peer.startswith("::ffff:") else peer)
+    return out
+
+
+def ensure_table():
+    if run(["nft", "list", "table", "inet", TABLE])[0] == 0:
+        return
+    rules = (f"table inet {TABLE} {{\n"
+             "  set blocked4 { type ipv4_addr; flags timeout; }\n"
+             "  set blocked6 { type ipv6_addr; flags timeout; }\n"
+             "  chain input { type filter hook input priority -5; policy accept;\n"
+             "    ip saddr @blocked4 counter drop\n    ip6 saddr @blocked6 counter drop\n  }\n}\n")
+    rc, txt = run(["nft", "-f", "-"], rules)
+    if rc:
+        die("nft could not create the defender table: " + txt[:200], 3)
+
+
+def parse_ip(s):
+    try:
+        ip = ipaddress.ip_address(s)
+    except ValueError:
+        die(f"{s!r} is not an IP address")
+    if not ip.is_global:
+        die(f"{ip} is not a public address; LAN, VPN, loopback and link-local are never blocked (anti-lockout)")
+    return ip
+
+
+def own_addrs():
+    """Every address on this host, read from the kernel, so quarantine can never cut the box off itself."""
+    rc, txt = run(["ip", "-j", "addr", "show"])
+    out = set()
+    try:
+        for iface in json.loads(txt) if rc == 0 else []:
+            for a in iface.get("addr_info") or []:
+                if a.get("local"):
+                    out.add(a["local"].split("%")[0])
+    except (TypeError, ValueError):
+        pass
+    return out
+
+
+def default_gateways():
+    """IPv4 AND IPv6 default routers. `ip route` alone lists only IPv4: an isolation that dropped the IPv6
+    router's traffic cut an off-link IPv6 admin session within a minute."""
+    out = set()
+    for fam in ("-4", "-6"):
+        rc, txt = run(["ip", fam, "route", "show", "default"])
+        if rc == 0:
+            out |= {m.group(1).split("%")[0] for m in re.finditer(r"\bvia\s+(\S+)", txt)}
+    return out
+
+
+def _num(text, low, high):
+    """An ASCII decimal in [low, high], or None. str.isdigit() accepts '²' and other Unicode digits that
+    int() then rejects with a traceback - from a root helper, that is a crash instead of a refusal."""
+    if not re.fullmatch(r"[0-9]{1,9}", str(text or "")):
+        return None
+    n = int(text)
+    return n if low <= n <= high else None
+
+
+PROTECT_FILE = "/etc/gnoc-defender/protect"
+
+
+def protected(ip):
+    """True when ip falls in a root-owned admin list (/etc/gnoc-defender/protect, one IP or CIDR per line).
+    The live-session check alone protects an admin machine only WHILE it is connected; this one always does."""
+    try:
+        with open(PROTECT_FILE) as fh:
+            lines = fh.read().split()
+    except OSError:
+        return False
+    for ln in lines:
+        try:
+            if ip in ipaddress.ip_network(ln.strip(), strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def parse_lan_ip(s):
+    """A private/link-local address that may be quarantined; the gateway and this host are refused."""
+    try:
+        ip = ipaddress.ip_address(s)
+    except ValueError:
+        die(f"{s!r} is not an IP address")
+    if ip.is_global:
+        die(f"{ip} is public; use block, not quarantine")
+    if ip.is_loopback or ip.is_unspecified or ip.is_multicast or ip.is_reserved:
+        die(f"{ip} is not a device on the LAN")
+    if str(ip) in own_addrs():
+        die(f"{ip} is one of this host's own addresses")
+    if str(ip) in default_gateways():
+        die(f"{ip} is the default gateway: quarantining it would cut this host off the network")
+    if str(ip) in admin_peers():
+        die(f"{ip} holds a live admin session (ssh / remote desktop) to this box: refusing to cut it")
+    if protected(ip):
+        die(f"{ip} is in {PROTECT_FILE} (an admin machine): never quarantined")
+    return ip
+
+
+def add_element(ip, ttl):
+    """Add one address to the timeout set; a repeated quarantine replaces its timer instead of failing."""
+    ensure_table()
+    setname = "blocked6" if ip.version == 6 else "blocked4"
+    args = ["nft", "add", "element", "inet", TABLE, setname, f"{{ {ip} timeout {int(ttl)}s }}"]
+    rc, txt = run(args)
+    if rc and "exists" in txt.lower():
+        run(["nft", "delete", "element", "inet", TABLE, setname, f"{{ {ip} }}"])
+        rc, txt = run(args)
+    return rc, txt
+
+
+TABLE_ISO = "gnoc_isolate"
+ISO_PID = "/run/gnoc-isolate.pid"
+ISO_CLEANUP = "/run/gnoc-isolate-cleanup.sh"
+
+
+def dns_servers():
+    out = []
+    try:
+        with open("/etc/resolv.conf") as fh:
+            for ln in fh:
+                m = re.match(r"\s*nameserver\s+(\S+)", ln)
+                if m:
+                    out.append(m.group(1))
+    except OSError:
+        pass
+    return out
+
+
+def isolate_allowed(extra=()):
+    """Addresses that keep their path while the endpoint is isolated: the live admin peers, the gateway,
+    this host and DNS. An endpoint with no admin peer and no explicit allow is refused, never locked out."""
+    good = []
+    for x in list(extra) + list(admin_peers()) + list(default_gateways()) + list(own_addrs()) + dns_servers():
+        try:
+            ip = ipaddress.ip_address(str(x).split("%")[0])
+        except ValueError:
+            continue
+        if str(ip) not in good:
+            good.append(str(ip))
+    return good
+
+
+def isolation_script(allowed):
+    """The nft ruleset for endpoint isolation. Pure; the caller validates every address.
+
+    Established traffic is NOT blanket-allowed: an attacker's already-open C2 or SSH session must not survive
+    the isolation. Replies from the allowed admin/gateway/DNS/NTP addresses still pass by address, and DNS/NTP/
+    DHCP/ICMP replies have explicit rules, so the admin path keeps working while everything else is cut."""
+    allowed = [str(ipaddress.ip_address(a)) for a in allowed]
+    lines = [f"table inet {TABLE_ISO} {{", "  chain input {", "    type filter hook input priority 0; policy drop;",
+             "    iif lo accept"]
+    for a in allowed:
+        fam = "ip6" if ipaddress.ip_address(a).version == 6 else "ip"
+        lines.append(f"    {fam} saddr {a} accept")
+    # No port-only DNS/NTP rules: "any host from source port 53" let a remote reach every local port, and an
+    # attacker's C2 over 53/123 survived the isolation (QAQC 2026-11-19). The configured resolvers are in
+    # `allowed` and pass by address; DHCP keeps its exact client/server port pair.
+    lines += ["    udp sport 67 udp dport 68 accept", "    icmp type echo-reply accept", "    icmpv6 type echo-reply accept",
+              # IPv6 cannot reach even an allowed peer without neighbour/router discovery
+              "    icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert, nd-router-solicit } accept",
+              "  }",
+              "  chain output {", "    type filter hook output priority 0; policy drop;", "    oif lo accept"]
+    for a in allowed:
+        fam = "ip6" if ipaddress.ip_address(a).version == 6 else "ip"
+        lines.append(f"    {fam} daddr {a} accept")
+    lines += ["    udp sport 68 udp dport 67 accept", "    icmp type echo-request accept", "    icmpv6 type echo-request accept",
+              "    icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert, nd-router-solicit } accept",
+              "  }", "  chain forward { type filter hook forward priority 0; policy drop; }", "}"]
+    return "\n".join(lines) + "\n"
+
+
+def _stop_cleanup():
+    try:
+        with open(ISO_PID) as fh:
+            pid = int(fh.read().strip())
+        # The pid file lives in /run and can outlive a reboot; never SIGTERM a recycled pid.
+        with open(f"/proc/{pid}/cmdline", "rb") as fh:
+            argv = [x.decode("utf-8", "replace") for x in fh.read().split(b"\0") if x]
+        if any(ISO_CLEANUP in x for x in argv):
+            os.kill(pid, signal.SIGTERM)
+    except (OSError, ValueError):
+        pass
+    try:
+        os.unlink(ISO_PID)
+    except OSError:
+        pass
+
+
+def _start_cleanup(ttl):
+    _stop_cleanup()
+    with open(ISO_CLEANUP, "w") as fh:
+        fh.write("#!/bin/sh\nsleep %d\nnft delete table inet %s 2>/dev/null || true\nrm -f %s\nrm -f -- \"$0\"\n"
+                 % (int(ttl), TABLE_ISO, ISO_PID))
+    os.chmod(ISO_CLEANUP, 0o755)
+    p = subprocess.Popen(["/bin/sh", ISO_CLEANUP], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True, close_fds=True)
+    with open(ISO_PID, "w") as fh:
+        fh.write(str(p.pid))
+
+
+def isolate(ttl, extra=()):
+    if _num(ttl, 60, 86400) is None:
+        die("ttl must be 60..86400 seconds")
+    bad = []
+    for x in extra:
+        try:
+            ipaddress.ip_address(str(x).split("%")[0])
+        except ValueError:
+            bad.append(str(x)[:60])
+    if bad:
+        # a junk allow address used to satisfy the guard below and then be dropped, isolating with no admin path
+        die("not an IP address: " + ", ".join(bad))
+    if not admin_peers() and not extra:
+        die("no live admin session and no allow address: isolating this endpoint would lock you out. "
+            "Pass an allow IP: isolate <ttl> <admin-ip>")
+    allowed = isolate_allowed(extra)
+    if not allowed:
+        die("no allowed admin/gateway/DNS address could be resolved")
+    # Build the rules in one atomic nft transaction; a partial ruleset never goes live.
+    run(["nft", "delete", "table", "inet", TABLE_ISO])
+    rc, txt = run(["nft", "-f", "-"], isolation_script(allowed))
+    log(f"isolate ttl={ttl} allow={','.join(allowed)} rc={rc}")
+    if rc != 0:
+        die("nft could not install the isolation ruleset: " + txt[:300], 3)
+    _start_cleanup(int(ttl))
+    token = os.urandom(16).hex()
+    fd = os.open(ISO_TOKEN, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(token)
+    print(f"isolated this endpoint for {ttl}s; allowed: {', '.join(allowed)}\ntoken={token}")
+
+
+def _token_ok(token):
+    try:
+        with open(ISO_TOKEN) as fh:
+            want = fh.read().strip()
+    except OSError:
+        return False
+    import hmac
+    return bool(want) and hmac.compare_digest(want, str(token or ""))
+
+
+def unisolate(token):
+    if not _token_ok(token):
+        die("unisolate needs the token isolate printed (the timer still lifts it at its TTL)")
+    _stop_cleanup()
+    rc, txt = run(["nft", "delete", "table", "inet", TABLE_ISO])
+    for f in (ISO_CLEANUP, ISO_TOKEN):
+        try:
+            os.unlink(f)
+        except OSError:
+            pass
+    log(f"unisolate rc={rc}")
+    print("isolation removed" if rc == 0 else "this endpoint was not isolated (or already expired)")
+
+
+def is_protected(pid, comm):
+    """A protected NAME running a SYSTEM binary. The exe link is root-readable for every process."""
+    if comm not in PROTECTED:
+        return False
+    try:
+        exe = os.path.realpath(f"/proc/{pid}/exe")
+    except OSError:
+        return True
+    return exe.startswith(SYSTEM_EXE_DIRS) and "/tmp" not in exe
+
+
+def kill_pid(pid):
+    comm = proc_comm(pid)
+    if is_protected(pid, comm):
+        die(f"{comm} ({pid}) is protected: killing it could lock the user out or stop the system")
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        die(f"no process {pid}")
+    except PermissionError:
+        die(f"not permitted to kill {pid} ({comm})")
+    log(f"kill {pid} ({comm}) TERM")
+    for _ in range(20):
+        time.sleep(0.1)
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            print(f"killed {pid} ({comm})")
+            return
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
+    log(f"kill {pid} ({comm}) KILL")
+    print(f"killed {pid} ({comm})")
+
+
+def proc_comm(pid):
+    try:
+        with open(f"/proc/{pid}/comm") as fh:
+            return fh.read().strip()
+    except OSError:
+        die(f"no process {pid}")
+
+
+def _read_record():
+    try:
+        with open(SYSCTL_RECORD) as fh:
+            d = json.load(fh)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_record(rec):
+    os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+    tmp = SYSCTL_RECORD + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        json.dump(rec, fh)
+    os.replace(tmp, SYSCTL_RECORD)
+
+
+def main(a):
+    if not a:
+        die("verbs: status | block <ip> <ttl> | unblock <ip> | quarantine <lan-ip> <ttl> [mac] | release <ip> | "
+            "isolate <ttl> [allow-ip...] | unisolate <token> | sysctl <key> <value> | sysctl-undo <key> | "
+            "pause <pid> | resume <pid> | kill <pid> | flush [token]")
+    v = a[0]
+    if v == "status" and len(a) == 1:
+        rc, txt = run(["nft", "list", "table", "inet", TABLE])
+        rc2, txt2 = run(["nft", "list", "table", "inet", TABLE_ISO])
+        print(f"helper v{VERSION}\n" + (txt if rc == 0 else "no defender table (nothing blocked)"))
+        if rc2 == 0:
+            print("\nisolation table:\n" + txt2)
+        return
+    if v == "block" and len(a) == 3:
+        ip = parse_ip(a[1])
+        if _num(a[2], 60, 86400) is None:
+            die("ttl must be 60..86400 seconds")
+        if str(ip) in admin_peers():
+            die(f"{ip} holds a live admin session (ssh / remote desktop) to this box: refusing to cut it")
+        if protected(ip):
+            die(f"{ip} is in {PROTECT_FILE} (an admin machine): never blocked")
+        # defence in depth behind the chat's own check: never this host, its router or its resolvers
+        if str(ip) in own_addrs() | default_gateways() | {d.split("%")[0] for d in dns_servers()}:
+            die(f"{ip} is this host, its default gateway or its DNS server: refusing to cut it")
+        rc, txt = add_element(ip, int(a[2]))
+        log(f"block {ip} {a[2]}s rc={rc}")
+        print(f"blocked {ip} for {a[2]}s" if rc == 0 else "FAILED: " + txt[:200])
+        sys.exit(0 if rc == 0 else 3)
+    if v == "quarantine" and len(a) in (3, 4):
+        ip = parse_lan_ip(a[1])
+        if _num(a[2], 60, 86400) is None:
+            die("ttl must be 60..86400 seconds")
+        mac = a[3].strip().lower() if len(a) == 4 else ""
+        if mac and not re.fullmatch(r"[0-9a-f]{2}(?::[0-9a-f]{2}){5}", mac):
+            die("mac must look like aa:bb:cc:dd:ee:ff")
+        rc, txt = add_element(ip, int(a[2]))
+        log(f"quarantine {ip} {a[2]}s mac={mac or '-'} rc={rc}")
+        print(f"quarantined {ip} for {a[2]}s on THIS host" if rc == 0 else "FAILED: " + txt[:200])
+        sys.exit(0 if rc == 0 else 3)
+    if v in ("unblock", "release") and len(a) == 2:
+        try:
+            ip = ipaddress.ip_address(a[1])
+        except ValueError:
+            die("not an IP address")
+        rc, txt = run(["nft", "delete", "element", "inet", TABLE, "blocked6" if ip.version == 6 else "blocked4",
+                       f"{{ {ip} }}"])
+        log(f"{v} {ip} rc={rc}")
+        print(f"released {ip}" if rc == 0 else f"{ip} was not blocked (or already expired)")
+        return
+    if v == "isolate" and len(a) >= 2:
+        isolate(a[1], a[2:])
+        return
+    if v == "unisolate" and len(a) == 2:
+        unisolate(a[1])
+        return
+    if v == "kill" and len(a) == 2:
+        if _num(a[1], 2, 2 ** 22) is None:
+            die("pid must be a number above 1")
+        kill_pid(int(a[1]))
+        return
+    if v == "sysctl" and len(a) == 3:
+        k, val = a[1], a[2]
+        if k not in SYSCTL or val not in SYSCTL[k]:
+            die(f"sysctl {k}={val} is not a hardening value on the allowlist")
+        rc0, before = run(["sysctl", "-n", k])
+        if rc0 == 0:
+            rec = _read_record()
+            rec.setdefault(k, before.strip())   # the FIRST value seen is the one to restore
+            _write_record(rec)
+        rc, txt = run(["sysctl", "-w", f"{k}={val}"])
+        log(f"sysctl {k}={val} rc={rc}")
+        print(txt if rc == 0 else "FAILED: " + txt[:200])
+        sys.exit(0 if rc == 0 else 3)
+    if v == "sysctl-undo" and len(a) == 2:
+        k = a[1]
+        rec = _read_record()
+        if k not in SYSCTL or k not in rec or not re.fullmatch(r"-?\d{1,3}", str(rec[k])):
+            die(f"no recorded value to restore for {k}")
+        rc, txt = run(["sysctl", "-w", f"{k}={rec[k]}"])
+        if rc == 0:
+            rec.pop(k, None)
+            _write_record(rec)
+        log(f"sysctl-undo {k}={rec.get(k, '(restored)')} rc={rc}")
+        print(txt if rc == 0 else "FAILED: " + txt[:200])
+        sys.exit(0 if rc == 0 else 3)
+    if v in ("pause", "resume") and len(a) == 2:
+        if _num(a[1], 2, 2 ** 22) is None:
+            die("pid must be a number above 1")
+        pid = int(a[1])
+        comm = proc_comm(pid)
+        if v == "pause" and is_protected(pid, comm):
+            die(f"{comm} ({pid}) is protected: pausing it could lock the user out or stop the system")
+        try:
+            os.kill(pid, signal.SIGSTOP if v == "pause" else signal.SIGCONT)
+        except ProcessLookupError:
+            die(f"no process {pid} (it exited)")
+        except PermissionError:
+            die(f"not permitted to signal {pid} ({comm})")
+        log(f"{v} {pid} ({comm})")
+        print(f"{'paused' if v == 'pause' else 'resumed'} {pid} ({comm})")
+        return
+    if v == "flush" and len(a) in (1, 2):
+        rc, txt = run(["nft", "delete", "table", "inet", TABLE])
+        rc2 = 1
+        if len(a) == 2 and _token_ok(a[1]):   # the isolation table only with its token
+            _stop_cleanup()
+            rc2, _ = run(["nft", "delete", "table", "inet", TABLE_ISO])
+        log(f"flush rc={rc} iso_rc={rc2}")
+        print("defender tables removed" if rc == 0 or rc2 == 0 else "nothing to flush")
+        return
+    die(f"unknown or malformed verb: {' '.join(a)[:80]}")
+
+
+if __name__ == "__main__":
+    if os.geteuid() != 0:
+        die("run through sudo", 1)
+    main(sys.argv[1:])

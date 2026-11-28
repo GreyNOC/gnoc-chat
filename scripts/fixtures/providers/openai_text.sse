@@ -1,0 +1,10 @@
+data: {"id":"chatcmpl-fixtureText","object":"chat.completion.chunk","created":1764115200,"model":"deepseek-chat","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-fixtureText","object":"chat.completion.chunk","created":1764115200,"model":"deepseek-chat","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-fixtureText","object":"chat.completion.chunk","created":1764115200,"model":"deepseek-chat","choices":[{"index":0,"delta":{"content":" from the OpenAI wire."},"finish_reason":"stop"}]}
+
+data: {"id":"chatcmpl-fixtureText","object":"chat.completion.chunk","created":1764115200,"model":"deepseek-chat","choices":[],"usage":{"prompt_tokens":2100,"completion_tokens":9,"total_tokens":2109,"prompt_tokens_details":{"cached_tokens":2048}}}
+
+data: [DONE]
+

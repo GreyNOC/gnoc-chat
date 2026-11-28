@@ -1,0 +1,3 @@
+{"template-id": "fixture-critical-rce", "info": {"name": "x", "severity": "critical", "tags": ["cve", "rce"]}, "host": "https://a.inscope.example", "matched-at": "https://a.inscope.example/x", "type": "http", "verdict": "CRITICAL-CANDIDATE", "matcher-name": "body", "extracted-results": ["uid=0(root)"]}
+{"template-id": "git-config", "info": {"name": "Git config", "severity": "medium", "tags": ["exposure", "config", "git"]}, "host": "https://b.inscope.example", "matched-at": "https://b.inscope.example/.git/config", "type": "http"}
+{"template-id": "fixture-takeover", "info": {"name": "t", "severity": "high", "tags": ["takeover"]}, "host": "b.inscope.example", "matched-at": "https://b.inscope.example", "type": "http", "verdict": "FINDING"}

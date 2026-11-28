@@ -1,0 +1,10 @@
+# Pins what "ruff-clean" means for this repo (AGENTS.md), so it does not depend on whatever user-level ruff
+# config the contributor's machine has. The rules are pycodestyle errors and pyflakes: the existing code is
+# written to them (it carries `# noqa: E402` for its sys.path imports). Lines run to 120 columns; about 240
+# older lines run past that, and the line-length rule is left off rather than reformatting code nobody changed.
+target-version = "py310"
+line-length = 120
+
+[lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]

@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "gnoc sandbox selftest",
+  "version": "0.0.1",
+  "background": {"service_worker": "sw.js"},
+  "content_scripts": [{"matches": ["http://127.0.0.1/*"], "js": ["cs.js"]}],
+  "externally_connectable": {"matches": ["http://127.0.0.1/*"]},
+  "host_permissions": ["http://127.0.0.1/*"]
+}
